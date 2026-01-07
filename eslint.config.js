@@ -20,7 +20,7 @@ export default [
     },
     rules: {
       'curly': ['error', 'all'],
-      'no-unused-vars': ['error', { 'argsIgnorePattern': '^_' }],
+      'no-unused-vars': ['error', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_' }],
       'max-params': ['error', 7], // GitCommit needs 6
       'max-lines-per-function': 'off',
       'max-nested-callbacks': 'off',

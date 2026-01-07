@@ -1,4 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+/**
+ * @fileoverview Integration tests for GitPlumbing
+ */
+
+/* global beforeEach, afterEach */
+
 import { mkdtempSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';

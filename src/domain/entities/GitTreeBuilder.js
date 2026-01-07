@@ -4,8 +4,6 @@
 
 import GitTree from './GitTree.js';
 import GitTreeEntry from './GitTreeEntry.js';
-import GitFileMode from '../value-objects/GitFileMode.js';
-import GitSha from '../value-objects/GitSha.js';
 import ValidationError from '../errors/ValidationError.js';
 
 /**

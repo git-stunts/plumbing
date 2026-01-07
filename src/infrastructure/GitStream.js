@@ -98,4 +98,16 @@ export default class GitStream {
       reader.releaseLock();
     }
   }
+
+  /**
+   * Closes the underlying stream and releases resources.
+   * @returns {Promise<void>}
+   */
+  async destroy() {
+    if (typeof this._stream.destroy === 'function') {
+      this._stream.destroy();
+    } else if (typeof this._stream.cancel === 'function') {
+      await this._stream.cancel();
+    }
+  }
 }

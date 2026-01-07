@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+
 import GitCommitBuilder from '../../../src/domain/entities/GitCommitBuilder.js';
 import GitCommit from '../../../src/domain/entities/GitCommit.js';
 import GitSha from '../../../src/domain/value-objects/GitSha.js';

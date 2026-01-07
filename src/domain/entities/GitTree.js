@@ -33,7 +33,9 @@ export default class GitTree {
 
     this.sha = sha instanceof GitSha ? sha : (result.data.sha ? new GitSha(result.data.sha) : null);
     this._entries = entries.map((e, i) => {
-      if (e instanceof GitTreeEntry) return e;
+      if (e instanceof GitTreeEntry) {
+        return e;
+      }
       const d = result.data.entries[i];
       return new GitTreeEntry(d.mode, d.sha, d.path);
     });

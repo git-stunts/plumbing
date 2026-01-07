@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+
 import GitPlumbing from '../index.js';
 import ShellRunner from '../ShellRunner.js';
 

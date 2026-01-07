@@ -9,12 +9,9 @@ describe('ShellRunner', () => {
 
     expect(result.stdoutStream).toBeDefined();
     
-    // Consume stream to avoid hanging
-    const reader = result.stdoutStream.getReader ? result.stdoutStream.getReader() : null;
-    if (reader) {
-      while (!(await reader.read()).done) {}
-    } else {
-      for await (const _ of result.stdoutStream) {}
+    // Consume stream to avoid hanging and leaks
+    for await (const _ of result.stdoutStream) {
+      // noop
     }
 
     const { code } = await result.exitPromise;
@@ -26,6 +23,9 @@ describe('ShellRunner', () => {
       command: 'git',
       args: ['hash-object', '--invalid-flag']
     });
+
+    // Must consume stdout even if empty to avoid leaks in some runtimes
+    for await (const _ of result.stdoutStream) { /* noop */ }
 
     const { code, stderr } = await result.exitPromise;
     expect(code).not.toBe(0);
