@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Custom Runner Registration**: Added `ShellRunnerFactory.register()` to allow developers to inject custom shell execution logic (e.g., SSH, WASM).
 - **Environment Overrides**: `GitPlumbing.createDefault()` and `ShellRunnerFactory.create()` now support explicit environment overrides.
 - **Repository Factory**: Added `GitPlumbing.createRepository()` for single-line high-level service instantiation.
+- **Workflow Recipes**: Created `docs/RECIPES.md` providing step-by-step guides for low-level Git workflows (e.g., 'Commit from Scratch').
 
 ### Changed
 - **Memory Optimization**: Enhanced `GitStream.collect()` to use chunk-based accumulation with `Uint8Array.set()`, reducing redundant string allocations during collection.

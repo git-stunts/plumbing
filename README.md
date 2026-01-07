@@ -107,6 +107,12 @@ This project strictly adheres to modern engineering principles:
 
 For a deeper dive, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
+## 📖 Documentation
+
+- [**Architecture & Design**](./ARCHITECTURE.md) - Deep dive into the hexagonal architecture and design principles.
+- [**Workflow Recipes**](./docs/RECIPES.md) - Step-by-step guides for common Git plumbing tasks (e.g., manual commits).
+- [**Contributing**](./CONTRIBUTING.md) - Guidelines for contributing to the project.
+
 ## 🧪 Testing
 
 We take cross-platform compatibility seriously. Our test suite runs in parallel across all supported runtimes using Docker.
