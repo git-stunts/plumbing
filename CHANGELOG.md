@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-01-07
+
+### Added
+- **GitErrorClassifier**: Extracted error categorization logic from the orchestrator into a dedicated domain service. Uses regex and exit codes (e.g., 128) to identify lock contention and state issues.
+- **ProhibitedFlagError**: New specialized error thrown when restricted Git flags (like `--work-tree`) are detected, providing remediation guidance and documentation links.
+- **Dynamic Command Registration**: Added `CommandSanitizer.allow(commandName)` to permit runtime extension of the allowed plumbing command list.
+
+### Changed
+- **Dependency Injection (DI)**: Refactored `CommandSanitizer` and `ExecutionOrchestrator` into injectable class instances, improving testability and modularity of the `GitPlumbing` core.
+- **Sanitizer Memoization**: Implemented an internal LRU-ish cache in `CommandSanitizer` to skip re-validation of identical repetitive commands, improving performance for high-frequency operations.
+- **Enhanced Deno Shim**: Updated the test shim to include `beforeEach`, `afterEach`, and other lifecycle hooks for full parity with Vitest.
+
 ## [2.3.0] - 2026-01-07
 
 ### Changed

@@ -8,7 +8,8 @@ A low-level, robust, and environment-agnostic Git plumbing library for the moder
 - **Multi-Runtime Support**: Native adapters for Node.js, Bun, and Deno with automatic environment detection.
 - **Robust Schema Validation**: Powered by **Zod**, ensuring every Entity and Value Object is valid before use.
 - **Hexagonal Architecture**: Strict separation between core domain logic and infrastructure adapters.
-- **Execution Orchestration**: Centralized retry and lock-detection logic for maximum reliability.
+- **Dependency Injection**: Core services like `CommandSanitizer` and `ExecutionOrchestrator` are injectable for maximum testability and customization.
+- **Execution Orchestration**: Centralized retry and lock-detection logic powered by a dedicated `GitErrorClassifier`.
 - **OOM Protection**: Integrated safety buffering (`GitStream.collect`) with configurable byte limits.
 - **Type-Safe Domain**: Formalized Value Objects for `GitSha`, `GitRef`, `GitFileMode`, and `GitSignature`.
 - **Hardened Security**: Integrated `CommandSanitizer` to prevent argument injection attacks and `EnvironmentPolicy` for clean process isolation.

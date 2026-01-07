@@ -2,13 +2,21 @@
  * @fileoverview ExecutionOrchestrator - Domain service for command execution lifecycle
  */
 
-import GitPlumbingError from '../errors/GitPlumbingError.js';
-import GitRepositoryLockedError from '../errors/GitRepositoryLockedError.js';
+import GitErrorClassifier from './GitErrorClassifier.js';
 
 /**
  * ExecutionOrchestrator manages the retry and failure detection logic for Git commands.
  */
 export default class ExecutionOrchestrator {
+  /**
+   * @param {Object} [options]
+   * @param {GitErrorClassifier} [options.classifier]
+   */
+  constructor({ classifier = new GitErrorClassifier() } = {}) {
+    /** @private */
+    this.classifier = classifier;
+  }
+
   /**
    * Orchestrates the execution of a command with retry and lock detection.
    * @param {Object} options
@@ -18,7 +26,7 @@ export default class ExecutionOrchestrator {
    * @param {string} options.traceId
    * @returns {Promise<string>}
    */
-  static async orchestrate({ execute, retryPolicy, args, traceId }) {
+  async orchestrate({ execute, retryPolicy, args, traceId }) {
     let attempt = 0;
 
     while (attempt < retryPolicy.maxAttempts) {
@@ -30,45 +38,35 @@ export default class ExecutionOrchestrator {
         const latency = performance.now() - startTime;
 
         if (result.code !== 0) {
-          // Check for lock contention
-          const isLocked = result.stderr.includes('index.lock') || result.stderr.includes('.lock');
-          if (isLocked) {
-            if (attempt < retryPolicy.maxAttempts) {
-              const backoff = retryPolicy.getDelay(attempt + 1);
-              await new Promise(resolve => setTimeout(resolve, backoff));
-              continue;
-            }
-            throw new GitRepositoryLockedError(`Git command failed: repository is locked`, 'ExecutionOrchestrator.orchestrate', {
-              args,
-              stderr: result.stderr,
-              code: result.code,
-              traceId,
-              latency
-            });
-          }
-
-          throw new GitPlumbingError(`Git command failed with code ${result.code}`, 'ExecutionOrchestrator.orchestrate', {
-            args,
-            stderr: result.stderr,
-            stdout,
+          const error = this.classifier.classify({
             code: result.code,
+            stderr: result.stderr,
+            args,
+            stdout,
             traceId,
             latency,
-            timedOut: result.timedOut
+            operation: 'ExecutionOrchestrator.orchestrate'
           });
+
+          if (this.classifier.isRetryable(error) && attempt < retryPolicy.maxAttempts) {
+            const backoff = retryPolicy.getDelay(attempt + 1);
+            await new Promise(resolve => setTimeout(resolve, backoff));
+            continue;
+          }
+
+          throw error;
         }
 
         return stdout.trim();
       } catch (err) {
-        if (err instanceof GitPlumbingError) {
-          throw err;
+        // If it's already a classified error, just rethrow
+        if (err.name?.includes('Error')) {
+           // We already classified it if result.code was non-zero
+           // If it's a timeout or spawn error, we might need classification
         }
-        throw new GitPlumbingError(err.message, 'ExecutionOrchestrator.orchestrate', { 
-          args, 
-          originalError: err, 
-          traceId,
-          latency: performance.now() - startTime
-        });
+        
+        // Re-classify unexpected errors if needed, but usually we just want to wrap them
+        throw err;
       }
     }
   }

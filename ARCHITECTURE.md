@@ -10,16 +10,18 @@ The codebase is strictly partitioned into three layers:
 Contains the business logic, entities, and value objects. It is **pure** and has zero dependencies on infrastructure or specific runtimes.
 - **Entities**: `GitCommit`, `GitTree`, `GitBlob`.
 - **Value Objects**: `GitSha`, `GitRef`, `GitFileMode`, `GitSignature`.
-- **Services**: `CommandSanitizer` (security), `ByteMeasurer`.
+- **Services**: `CommandSanitizer` (security), `ExecutionOrchestrator` (retry/backoff), `GitErrorClassifier`, `ByteMeasurer`.
 
 ### 2. The Ports (Contracts)
 Functional interfaces that define how the domain interacts with the outside world.
 - **`CommandRunner`**: A functional port defined in `src/ports/`. It enforces a strict contract: every command must return a `stdoutStream` and an `exitPromise`.
 
-### 3. The Infrastructure (Adapters)
-Runtime-specific implementations of the ports.
-- **Adapters**: `NodeShellRunner`, `BunShellRunner`, `DenoShellRunner`.
-- **`GitStream`**: A universal wrapper that makes Node.js streams and Web Streams behave identically.
+## 💉 Dependency Injection
+
+Core services (`CommandSanitizer`, `ExecutionOrchestrator`) are designed as injectable instances. This allows developers to:
+- Provide custom sanitization rules.
+- Inject mock orchestrators for testing failure modes.
+- Extend the `GitErrorClassifier` for specialized error handling.
 
 ## 🛡️ Defense-in-Depth Validation
 

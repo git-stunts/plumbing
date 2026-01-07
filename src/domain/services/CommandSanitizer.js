@@ -3,6 +3,7 @@
  */
 
 import ValidationError from '../errors/ValidationError.js';
+import ProhibitedFlagError from '../errors/ProhibitedFlagError.js';
 
 /**
  * Sanitizes and validates git command arguments
@@ -14,8 +15,10 @@ export default class CommandSanitizer {
 
   /**
    * Comprehensive whitelist of allowed git plumbing and essential porcelain commands.
+   * Using a Set for efficient lookups and dynamic registration.
+   * @private
    */
-  static ALLOWED_COMMANDS = [
+  static _ALLOWED_COMMANDS = new Set([
     'rev-parse',
     'update-ref',
     'cat-file',
@@ -40,7 +43,7 @@ export default class CommandSanitizer {
     '--version',
     'init',
     'config'
-  ];
+  ]);
 
   /**
    * Flags that are strictly prohibited due to security risks or environment interference.
@@ -60,27 +63,53 @@ export default class CommandSanitizer {
   ];
 
   /**
+   * Dynamically allows a command.
+   * @param {string} commandName
+   */
+  static allow(commandName) {
+    this._ALLOWED_COMMANDS.add(commandName.toLowerCase());
+  }
+
+  /**
+   * @param {Object} [options]
+   * @param {number} [options.maxCacheSize=100]
+   */
+  constructor({ maxCacheSize = 100 } = {}) {
+    /** @private */
+    this._cache = new Map();
+    /** @private */
+    this._maxCacheSize = maxCacheSize;
+  }
+
+  /**
    * Validates a list of arguments for potential injection or prohibited flags.
+   * Includes memoization to skip re-validation of repetitive commands.
    * @param {string[]} args - The array of git arguments to sanitize.
    * @returns {string[]} The validated arguments array.
-   * @throws {import('../errors/ValidationError.js').default} If validation fails.
+   * @throws {ValidationError|ProhibitedFlagError} If validation fails.
    */
-  static sanitize(args) {
+  sanitize(args) {
     if (!Array.isArray(args)) {
       throw new ValidationError('Arguments must be an array', 'CommandSanitizer.sanitize');
+    }
+
+    // Simple cache key: joined arguments
+    const cacheKey = args.join('\0');
+    if (this._cache.has(cacheKey)) {
+      return args;
     }
 
     if (args.length === 0) {
       throw new ValidationError('Arguments array cannot be empty', 'CommandSanitizer.sanitize');
     }
 
-    if (args.length > this.MAX_ARGS) {
+    if (args.length > CommandSanitizer.MAX_ARGS) {
       throw new ValidationError(`Too many arguments: ${args.length}`, 'CommandSanitizer.sanitize');
     }
 
     // Check if the base command is allowed
     const command = args[0].toLowerCase();
-    if (!this.ALLOWED_COMMANDS.includes(command)) {
+    if (!CommandSanitizer._ALLOWED_COMMANDS.has(command)) {
       throw new ValidationError(`Prohibited git command detected: ${args[0]}`, 'CommandSanitizer.sanitize', { command: args[0] });
     }
 
@@ -90,7 +119,7 @@ export default class CommandSanitizer {
         throw new ValidationError('Each argument must be a string', 'CommandSanitizer.sanitize', { arg });
       }
 
-      if (arg.length > this.MAX_ARG_LENGTH) {
+      if (arg.length > CommandSanitizer.MAX_ARG_LENGTH) {
         throw new ValidationError(`Argument too long: ${arg.length}`, 'CommandSanitizer.sanitize');
       }
 
@@ -100,21 +129,28 @@ export default class CommandSanitizer {
 
       // Strengthen configuration flag blocking: Block -c or --config anywhere
       if (lowerArg === '-c' || lowerArg === '--config' || lowerArg.startsWith('--config=')) {
-        throw new ValidationError(`Configuration overrides are prohibited: ${arg}`, 'CommandSanitizer.sanitize');
+        throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize');
       }
 
       // Check for other prohibited flags
-      for (const prohibited of this.PROHIBITED_FLAGS) {
+      for (const prohibited of CommandSanitizer.PROHIBITED_FLAGS) {
         if (lowerArg === prohibited || lowerArg.startsWith(`${prohibited}=`)) {
-          throw new ValidationError(`Prohibited git flag detected: ${arg}`, 'CommandSanitizer.sanitize', { arg });
+          throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize');
         }
       }
     }
 
-    if (totalLength > this.MAX_TOTAL_LENGTH) {
+    if (totalLength > CommandSanitizer.MAX_TOTAL_LENGTH) {
       throw new ValidationError(`Total arguments length too long: ${totalLength}`, 'CommandSanitizer.sanitize');
     }
     
+    // Manage cache size (LRU-ish: delete oldest entry)
+    if (this._cache.size >= this._maxCacheSize) {
+      const firstKey = this._cache.keys().next().value;
+      this._cache.delete(firstKey);
+    }
+    this._cache.set(cacheKey, true);
+
     return args;
   }
 }

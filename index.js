@@ -24,8 +24,15 @@ export default class GitPlumbing {
    * @param {Object} options
    * @param {import('./src/ports/CommandRunnerPort.js').CommandRunner} options.runner - The functional port for shell execution.
    * @param {string} [options.cwd=process.cwd()] - The working directory for git operations.
+   * @param {CommandSanitizer} [options.sanitizer] - Injected sanitizer.
+   * @param {ExecutionOrchestrator} [options.orchestrator] - Injected orchestrator.
    */
-  constructor({ runner, cwd = process.cwd() }) {
+  constructor({ 
+    runner, 
+    cwd = process.cwd(),
+    sanitizer = new CommandSanitizer(),
+    orchestrator = new ExecutionOrchestrator()
+  }) {
     if (typeof runner !== 'function') {
       throw new InvalidArgumentError('A functional runner port is required for GitPlumbing', 'GitPlumbing.constructor');
     }
@@ -40,6 +47,10 @@ export default class GitPlumbing {
     this.runner = runner;
     /** @private */
     this.cwd = resolvedCwd;
+    /** @private */
+    this.sanitizer = sanitizer;
+    /** @private */
+    this.orchestrator = orchestrator;
   }
 
   /**
@@ -47,6 +58,8 @@ export default class GitPlumbing {
    * @param {Object} [options]
    * @param {string} [options.cwd]
    * @param {string} [options.env] - Override environment detection.
+   * @param {CommandSanitizer} [options.sanitizer]
+   * @param {ExecutionOrchestrator} [options.orchestrator]
    * @returns {GitPlumbing}
    */
   static createDefault(options = {}) {
@@ -108,7 +121,7 @@ export default class GitPlumbing {
     traceId = Math.random().toString(36).substring(7),
     retryPolicy = CommandRetryPolicy.default()
   }) {
-    return ExecutionOrchestrator.orchestrate({
+    return this.orchestrator.orchestrate({
       execute: async () => {
         const stream = await this.executeStream({ args, input });
         const stdout = await stream.collect({ maxBytes, asString: true });
@@ -130,7 +143,7 @@ export default class GitPlumbing {
    * @throws {GitPlumbingError} - If command setup fails.
    */
   async executeStream({ args, input }) {
-    CommandSanitizer.sanitize(args);
+    this.sanitizer.sanitize(args);
 
     const options = RunnerOptionsSchema.parse({
       command: 'git',
