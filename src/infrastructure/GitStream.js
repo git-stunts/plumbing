@@ -5,6 +5,21 @@
 import { DEFAULT_MAX_BUFFER_SIZE } from '../ports/RunnerOptionsSchema.js';
 
 /**
+ * Registry for automatic cleanup of abandoned streams.
+ */
+const REGISTRY = new FinalizationRegistry(async (stream) => {
+  try {
+    if (typeof stream.destroy === 'function') {
+      stream.destroy();
+    } else if (typeof stream.cancel === 'function') {
+      await stream.cancel();
+    }
+  } catch {
+    // Ignore errors in finalization
+  }
+});
+
+/**
  * GitStream provides a unified interface for consuming command output
  * across Node.js, Bun, and Deno runtimes.
  */
@@ -16,6 +31,10 @@ export default class GitStream {
   constructor(stream, exitPromise = Promise.resolve({ code: 0, stderr: '' })) {
     this._stream = stream;
     this.finished = exitPromise;
+    this._consumed = false;
+
+    // Register for automatic cleanup if garbage collected before consumption
+    REGISTRY.register(this, stream, this);
   }
 
   /**
@@ -37,7 +56,10 @@ export default class GitStream {
           const { done, value } = await it.next();
           return { done, value };
         } catch (err) {
-          // If the stream was destroyed/ended unexpectedly
+          /**
+           * Handle premature close in Node.js.
+           * This happens if the underlying process exits or is killed before the stream ends.
+           */
           if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
             return { done: true, value: undefined };
           }
@@ -60,15 +82,19 @@ export default class GitStream {
     let totalBytes = 0;
     let result = '';
 
-    for await (const chunk of this) {
-      const bytes = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk;
-      
-      if (totalBytes + bytes.length > maxBytes) {
-        throw new Error(`Buffer limit exceeded: ${maxBytes} bytes`);
-      }
+    try {
+      for await (const chunk of this) {
+        const bytes = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk;
+        
+        if (totalBytes + bytes.length > maxBytes) {
+          throw new Error(`Buffer limit exceeded: ${maxBytes} bytes`);
+        }
 
-      totalBytes += bytes.length;
-      result += typeof chunk === 'string' ? chunk : decoder.decode(chunk);
+        totalBytes += bytes.length;
+        result += typeof chunk === 'string' ? chunk : decoder.decode(chunk);
+      }
+    } finally {
+      await this.destroy();
     }
 
     return result;
@@ -78,24 +104,34 @@ export default class GitStream {
    * Implements the Async Iterable protocol
    */
   async *[Symbol.asyncIterator]() {
-    // Favor native async iterator if available (Node 10+, Deno, Bun)
-    if (typeof this._stream[Symbol.asyncIterator] === 'function') {
-      yield* this._stream;
-      return;
+    if (this._consumed) {
+      throw new Error('Stream has already been consumed');
     }
+    this._consumed = true;
+    REGISTRY.unregister(this);
 
-    // Fallback to reader-based iteration
-    const reader = this.getReader();
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
+      // Favor native async iterator if available (Node 10+, Deno, Bun)
+      if (typeof this._stream[Symbol.asyncIterator] === 'function') {
+        yield* this._stream;
+        return;
+      }
+
+      // Fallback to reader-based iteration
+      const reader = this.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          yield value;
         }
-        yield value;
+      } finally {
+        reader.releaseLock();
       }
     } finally {
-      reader.releaseLock();
+      await this.destroy();
     }
   }
 
@@ -104,10 +140,15 @@ export default class GitStream {
    * @returns {Promise<void>}
    */
   async destroy() {
-    if (typeof this._stream.destroy === 'function') {
-      this._stream.destroy();
-    } else if (typeof this._stream.cancel === 'function') {
-      await this._stream.cancel();
+    REGISTRY.unregister(this);
+    try {
+      if (typeof this._stream.destroy === 'function') {
+        this._stream.destroy();
+      } else if (typeof this._stream.cancel === 'function') {
+        await this._stream.cancel();
+      }
+    } catch {
+      // Ignore errors during destruction
     }
   }
 }

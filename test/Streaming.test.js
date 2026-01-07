@@ -8,7 +8,7 @@ describe('Streaming', () => {
   });
 
   it('executes a command and returns a readable stream', async () => {
-    const gitStream = await git.executeStream({ args: ['help'] });
+    const gitStream = await git.executeStream({ args: ['--version'] });
     
     expect(gitStream).toBeDefined();
     

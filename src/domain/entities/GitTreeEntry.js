@@ -8,15 +8,20 @@ import ValidationError from '../errors/ValidationError.js';
 import { GitTreeEntrySchema } from '../schemas/GitTreeEntrySchema.js';
 
 /**
+ * @typedef {import('../schemas/GitTreeEntrySchema.js').GitTreeEntry} GitTreeEntryData
+ */
+
+/**
  * Represents an entry in a Git tree
  */
 export default class GitTreeEntry {
   /**
-   * @param {GitFileMode|string} mode - File mode
-   * @param {GitSha|string} sha - Object SHA
-   * @param {string} path - File path
+   * @param {Object} options
+   * @param {GitFileMode|string} options.mode - File mode
+   * @param {GitSha|string} options.sha - Object SHA
+   * @param {string} options.path - File path
    */
-  constructor(mode, sha, path) {
+  constructor({ mode, sha, path }) {
     const data = {
       mode: mode instanceof GitFileMode ? mode.toString() : mode,
       sha: sha instanceof GitSha ? sha.toString() : sha,
@@ -63,7 +68,7 @@ export default class GitTreeEntry {
 
   /**
    * Returns a JSON representation of the entry
-   * @returns {Object}
+   * @returns {GitTreeEntryData}
    */
   toJSON() {
     return {

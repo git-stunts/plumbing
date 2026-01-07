@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-07
+
+### Added
+- **GitRepositoryService**: Extracted high-level repository operations (`revParse`, `updateRef`, `deleteRef`) into a dedicated domain service.
+- **Resilience Layer**: Implemented exponential backoff retry logic for Git lock contention (`index.lock`) in `GitPlumbing.execute`.
+- **Telemetric Trace IDs**: Added automatic and manual `traceId` correlation across command execution for production traceability.
+- **Performance Monitoring**: Integrated latency tracking for all Git command executions.
+- **Secure Runtime Adapters**: Implemented "Clean Environment" isolation in Node, Bun, and Deno runners, preventing sensitive env var leakage.
+- **Resource Lifecycle Management**: Enhanced `GitStream` with `FinalizationRegistry` and `destroy()` for deterministic cleanup of shell processes.
+
+### Changed
+- **Entity Unification**: Refactored `GitTreeEntry` to use object-based constructors, standardizing the entire domain entity API.
+- **Hardened Sanitizer**: Strengthened `CommandSanitizer` to block configuration overrides (`-c`, `--config`) globally and expanded the plumbing command whitelist.
+- **Enhanced Verification**: `GitPlumbing.verifyInstallation` now validates both the Git binary and the repository integrity of the current working directory.
+
+### Fixed
+- **Deno Resource Leaks**: Resolved process leaks in Deno by ensuring proper stream consumption across all test cases.
+- **Node.js Stream Performance**: Optimized async iteration in `GitStream` using native protocols.
+
 ## [2.0.0] - 2026-01-07
 
 ### Added

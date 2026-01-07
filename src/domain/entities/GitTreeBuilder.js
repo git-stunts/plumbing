@@ -36,7 +36,7 @@ export default class GitTreeBuilder {
    * @returns {GitTreeBuilder}
    */
   add({ path, sha, mode }) {
-    return this.addEntry(new GitTreeEntry(mode, sha, path));
+    return this.addEntry(new GitTreeEntry({ mode, sha, path }));
   }
 
   /**

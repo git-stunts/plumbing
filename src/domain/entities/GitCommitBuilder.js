@@ -5,7 +5,6 @@
 import GitCommit from './GitCommit.js';
 import GitSha from '../value-objects/GitSha.js';
 import GitSignature from '../value-objects/GitSignature.js';
-import ValidationError from '../errors/ValidationError.js';
 
 /**
  * Fluent builder for creating GitCommit instances
@@ -65,9 +64,6 @@ export default class GitCommitBuilder {
    * @returns {GitCommitBuilder}
    */
   parents(parents) {
-    if (!Array.isArray(parents)) {
-      throw new ValidationError('Parents must be an array', 'GitCommitBuilder.parents');
-    }
     this._parents = parents.map(p => (p instanceof GitSha ? p : new GitSha(p)));
     return this;
   }

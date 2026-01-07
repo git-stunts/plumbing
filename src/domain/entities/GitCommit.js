@@ -9,43 +9,67 @@ import ValidationError from '../errors/ValidationError.js';
 import { GitCommitSchema } from '../schemas/GitCommitSchema.js';
 
 /**
+ * @typedef {import('../schemas/GitCommitSchema.js').GitCommit} GitCommitData
+ */
+
+/**
  * Represents a Git commit object
  */
 export default class GitCommit {
   /**
    * @param {Object} options
-   * @param {GitSha|string|null} options.sha
-   * @param {GitSha|string} options.treeSha
-   * @param {GitSha[]|string[]} options.parents
-   * @param {GitSignature|Object} options.author
-   * @param {GitSignature|Object} options.committer
+   * @param {GitSha|null} options.sha
+   * @param {GitSha} options.treeSha
+   * @param {GitSha[]} options.parents
+   * @param {GitSignature} options.author
+   * @param {GitSignature} options.committer
    * @param {string} options.message
    */
   constructor({ sha, treeSha, parents, author, committer, message }) {
-    const data = {
-      sha: sha instanceof GitSha ? sha.toString() : sha,
-      treeSha: treeSha instanceof GitSha ? treeSha.toString() : treeSha,
-      parents: parents.map(p => (p instanceof GitSha ? p.toString() : p)),
-      author: author instanceof GitSignature ? author.toJSON() : author,
-      committer: committer instanceof GitSignature ? committer.toJSON() : committer,
-      message
-    };
+    if (sha !== null && !(sha instanceof GitSha)) {
+      throw new ValidationError('SHA must be a GitSha instance or null', 'GitCommit.constructor');
+    }
+    if (!(treeSha instanceof GitSha)) {
+      throw new ValidationError('treeSha must be a GitSha instance', 'GitCommit.constructor');
+    }
+    if (!(author instanceof GitSignature)) {
+      throw new ValidationError('author must be a GitSignature instance', 'GitCommit.constructor');
+    }
+    if (!(committer instanceof GitSignature)) {
+      throw new ValidationError('committer must be a GitSignature instance', 'GitCommit.constructor');
+    }
 
+    this.sha = sha;
+    this.treeSha = treeSha;
+    this.parents = [...parents];
+    this.author = author;
+    this.committer = committer;
+    this.message = message;
+  }
+
+  /**
+   * Factory method to create a GitCommit from raw data with validation.
+   * @param {GitCommitData} data
+   * @returns {GitCommit}
+   */
+  static fromData(data) {
     const result = GitCommitSchema.safeParse(data);
     if (!result.success) {
       throw new ValidationError(
-        `Invalid commit: ${result.error.errors[0].message}`,
-        'GitCommit.constructor',
+        `Invalid commit data: ${result.error.errors[0].message}`,
+        'GitCommit.fromData',
         { data, errors: result.error.errors }
       );
     }
 
-    this.sha = sha instanceof GitSha ? sha : (result.data.sha ? new GitSha(result.data.sha) : null);
-    this.treeSha = new GitSha(result.data.treeSha);
-    this.parents = result.data.parents.map(p => new GitSha(p));
-    this.author = author instanceof GitSignature ? author : new GitSignature(result.data.author);
-    this.committer = committer instanceof GitSignature ? committer : new GitSignature(result.data.committer);
-    this.message = result.data.message;
+    return new GitCommit({
+      sha: result.data.sha ? new GitSha(result.data.sha) : null,
+      treeSha: new GitSha(result.data.treeSha),
+      parents: result.data.parents.map(p => new GitSha(p)),
+      author: new GitSignature(result.data.author),
+      committer: new GitSignature(result.data.committer),
+      message: result.data.message
+    });
   }
 
   /**
@@ -82,7 +106,7 @@ export default class GitCommit {
 
   /**
    * Returns a JSON representation of the commit
-   * @returns {Object}
+   * @returns {GitCommitData}
    */
   toJSON() {
     return {

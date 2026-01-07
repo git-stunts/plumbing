@@ -12,6 +12,9 @@ export default class CommandSanitizer {
   static MAX_ARG_LENGTH = 8192;
   static MAX_TOTAL_LENGTH = 65536;
 
+  /**
+   * Comprehensive whitelist of allowed git plumbing and essential porcelain commands.
+   */
   static ALLOWED_COMMANDS = [
     'rev-parse',
     'update-ref',
@@ -27,15 +30,25 @@ export default class CommandSanitizer {
     'symbolic-ref',
     'for-each-ref',
     'show-ref',
+    'diff-tree',
+    'diff-index',
+    'diff-files',
+    'merge-base',
+    'ls-files',
+    'check-ignore',
+    'check-attr',
     '--version',
-    'help'
+    'init',
+    'config'
   ];
 
+  /**
+   * Flags that are strictly prohibited due to security risks or environment interference.
+   */
   static PROHIBITED_FLAGS = [
     '--upload-pack',
     '--receive-pack',
     '--ext-cmd',
-    '--config',
     '--exec-path',
     '--html-path',
     '--man-path',
@@ -43,8 +56,7 @@ export default class CommandSanitizer {
     '--work-tree',
     '--git-dir',
     '--namespace',
-    '--template',
-    '-c'
+    '--template'
   ];
 
   /**
@@ -84,8 +96,14 @@ export default class CommandSanitizer {
 
       totalLength += arg.length;
 
-      // Check for prohibited flags that could lead to command injection or configuration override
       const lowerArg = arg.toLowerCase();
+
+      // Strengthen configuration flag blocking: Block -c or --config anywhere
+      if (lowerArg === '-c' || lowerArg === '--config' || lowerArg.startsWith('--config=')) {
+        throw new ValidationError(`Configuration overrides are prohibited: ${arg}`, 'CommandSanitizer.sanitize');
+      }
+
+      // Check for other prohibited flags
       for (const prohibited of this.PROHIBITED_FLAGS) {
         if (lowerArg === prohibited || lowerArg.startsWith(`${prohibited}=`)) {
           throw new ValidationError(`Prohibited git flag detected: ${arg}`, 'CommandSanitizer.sanitize', { arg });

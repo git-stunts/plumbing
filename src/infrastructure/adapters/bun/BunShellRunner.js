@@ -9,12 +9,35 @@ import { RunnerResultSchema } from '../../../ports/RunnerResultSchema.js';
  */
 export default class BunShellRunner {
   /**
+   * List of environment variables allowed to be passed to the git process.
+   * @private
+   */
+  static _ALLOWED_ENV = [
+    'PATH',
+    'GIT_EXEC_PATH',
+    'GIT_TEMPLATE_DIR',
+    'GIT_CONFIG_NOSYSTEM',
+    'GIT_ATTR_NOSYSTEM',
+    'GIT_CONFIG_PARAMETERS'
+  ];
+
+  /**
    * Executes a command
    * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
    */
   async run({ command, args, cwd, input, timeout }) {
+    // Create a clean environment
+    const env = {};
+    const globalEnv = globalThis.process?.env || {};
+    for (const key of BunShellRunner._ALLOWED_ENV) {
+      if (globalEnv[key] !== undefined) {
+        env[key] = globalEnv[key];
+      }
+    }
+
     const process = Bun.spawn([command, ...args], {
       cwd,
+      env,
       stdin: 'pipe',
       stdout: 'pipe',
       stderr: 'pipe',
@@ -33,7 +56,7 @@ export default class BunShellRunner {
         if (timeout) {
           timeoutId = setTimeout(() => {
             try { process.kill(); } catch { /* ignore */ }
-            resolve({ code: 1, stderr: 'Command timed out' });
+            resolve({ code: 1, stderr: 'Command timed out', timedOut: true });
           }, timeout);
         }
       });
@@ -44,7 +67,7 @@ export default class BunShellRunner {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
-        return { code, stderr };
+        return { code, stderr, timedOut: false };
       })();
 
       return Promise.race([completionPromise, timeoutPromise]);

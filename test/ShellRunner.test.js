@@ -1,10 +1,10 @@
 import ShellRunner from '../ShellRunner.js';
 
 describe('ShellRunner', () => {
-  it('executes a simple command (git help)', async () => {
+  it('executes a simple command (git --version)', async () => {
     const result = await ShellRunner.run({
       command: 'git',
-      args: ['help']
+      args: ['--version']
     });
 
     expect(result.stdoutStream).toBeDefined();

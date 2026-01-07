@@ -11,11 +11,33 @@ import { DEFAULT_MAX_STDERR_SIZE } from '../../../ports/RunnerOptionsSchema.js';
  */
 export default class NodeShellRunner {
   /**
+   * List of environment variables allowed to be passed to the git process.
+   * @private
+   */
+  static _ALLOWED_ENV = [
+    'PATH',
+    'GIT_EXEC_PATH',
+    'GIT_TEMPLATE_DIR',
+    'GIT_CONFIG_NOSYSTEM',
+    'GIT_ATTR_NOSYSTEM',
+    'GIT_CONFIG_PARAMETERS'
+  ];
+
+  /**
    * Executes a command
    * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
    */
   async run({ command, args, cwd, input, timeout }) {
-    const child = spawn(command, args, { cwd });
+    // Create a clean environment
+    const env = {};
+    const globalEnv = globalThis.process?.env || {};
+    for (const key of NodeShellRunner._ALLOWED_ENV) {
+      if (globalEnv[key] !== undefined) {
+        env[key] = globalEnv[key];
+      }
+    }
+
+    const child = spawn(command, args, { cwd, env });
 
     if (child.stdin) {
       if (input) {
@@ -27,7 +49,6 @@ export default class NodeShellRunner {
 
     let stderr = '';
     child.stderr?.on('data', (chunk) => {
-      // Small buffer for stderr to provide context on failure
       if (stderr.length < DEFAULT_MAX_STDERR_SIZE) {
         stderr += chunk.toString();
       }
@@ -36,17 +57,17 @@ export default class NodeShellRunner {
     const exitPromise = new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
         child.kill();
-        resolve({ code: 1, stderr: `${stderr}\n[Command timed out after ${timeout}ms]` });
+        resolve({ code: 1, stderr, timedOut: true });
       }, timeout);
 
       child.on('exit', (code) => {
         clearTimeout(timeoutId);
-        resolve({ code: code ?? 1, stderr });
+        resolve({ code: code ?? 1, stderr, timedOut: false });
       });
 
       child.on('error', (err) => {
         clearTimeout(timeoutId);
-        resolve({ code: 1, stderr: `${stderr}\n${err.message}` });
+        resolve({ code: 1, stderr: `${stderr}\n${err.message}`, timedOut: false, error: err });
       });
     });
 

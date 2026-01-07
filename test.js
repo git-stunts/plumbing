@@ -8,18 +8,22 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import GitPlumbing from './index.js';
+import GitRepositoryService from './src/domain/services/GitRepositoryService.js';
 
 describe('GitPlumbing', () => {
   let tempDir;
   let plumbing;
+  let repo;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tempDir = mkdtempSync(path.join(os.tmpdir(), 'git-plumbing-test-'));
     plumbing = new GitPlumbing({ cwd: tempDir });
+    repo = new GitRepositoryService({ plumbing });
     // Initialize a repo for testing
-    plumbing.execute({ args: ['init'] });
-    plumbing.execute({ args: ['config', 'user.name', 'Tester'] });
-    plumbing.execute({ args: ['config', 'user.email', 'test@example.com'] });
+    await plumbing.execute({ args: ['init'] });
+    await plumbing.verifyInstallation();
+    await plumbing.execute({ args: ['config', 'user.name', 'Tester'] });
+    await plumbing.execute({ args: ['config', 'user.email', 'test@example.com'] });
   });
 
   afterEach(() => {
@@ -40,8 +44,8 @@ describe('GitPlumbing', () => {
       args: ['commit-tree', plumbing.emptyTree, '-m', 'test'] 
     });
     
-    await plumbing.updateRef({ ref: 'refs/heads/test', newSha: commitSha });
-    const resolved = await plumbing.revParse({ revision: 'refs/heads/test' });
+    await repo.updateRef({ ref: 'refs/heads/test', newSha: commitSha });
+    const resolved = await repo.revParse({ revision: 'refs/heads/test' });
     
     expect(resolved).toBe(commitSha);
   });

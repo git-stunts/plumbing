@@ -9,7 +9,6 @@ import GitSha from './src/domain/value-objects/GitSha.js';
 import GitPlumbingError from './src/domain/errors/GitPlumbingError.js';
 import InvalidArgumentError from './src/domain/errors/InvalidArgumentError.js';
 import CommandSanitizer from './src/domain/services/CommandSanitizer.js';
-import GitCommandBuilder from './src/domain/services/GitCommandBuilder.js';
 import GitStream from './src/infrastructure/GitStream.js';
 import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactory.js';
 
@@ -54,48 +53,84 @@ export default class GitPlumbing {
   }
 
   /**
-   * Verifies that the git binary is available.
+   * Verifies that the git binary is available and the CWD is a valid repository.
    * @throws {GitPlumbingError}
    */
   async verifyInstallation() {
     try {
+      // Check binary
       await this.execute({ args: ['--version'] });
+      
+      // Check if inside a work tree
+      const isInside = await this.execute({ args: ['rev-parse', '--is-inside-work-tree'] });
+      if (isInside !== 'true') {
+        throw new Error('Not inside a git work tree');
+      }
     } catch (err) {
-      throw new GitPlumbingError('Git binary not found or inaccessible', 'GitPlumbing.verifyInstallation', { 
+      throw new GitPlumbingError(`Git repository verification failed: ${err.message}`, 'GitPlumbing.verifyInstallation', { 
         originalError: err.message,
-        code: 'GIT_NOT_FOUND'
+        code: 'GIT_VERIFICATION_FAILED'
       });
     }
   }
 
   /**
    * Executes a git command asynchronously and buffers the result.
+   * Includes retry logic for lock contention and telemetry (Trace ID, Latency).
    * @param {Object} options
    * @param {string[]} options.args - Array of git arguments.
    * @param {string|Uint8Array} [options.input] - Optional stdin input.
    * @param {number} [options.maxBytes=DEFAULT_MAX_BUFFER_SIZE] - Maximum buffer size.
+   * @param {string} [options.traceId] - Correlation ID for the command.
    * @returns {Promise<string>} - The trimmed stdout.
    * @throws {GitPlumbingError} - If the command fails or buffer is exceeded.
    */
-  async execute({ args, input, maxBytes = DEFAULT_MAX_BUFFER_SIZE }) {
-    try {
-      const stream = await this.executeStream({ args, input });
-      const stdout = await stream.collect({ maxBytes });
-      const { code, stderr } = await stream.finished;
+  async execute({ args, input, maxBytes = DEFAULT_MAX_BUFFER_SIZE, traceId = Math.random().toString(36).substring(7) }) {
+    let attempt = 0;
+    const maxAttempts = 3;
 
-      if (code !== 0) {
-        throw new GitPlumbingError(`Git command failed with code ${code}`, 'GitPlumbing.execute', {
-          args,
-          stderr,
-          stdout,
-          code
+    while (attempt < maxAttempts) {
+      const startTime = performance.now();
+      attempt++;
+
+      try {
+        const stream = await this.executeStream({ args, input, traceId });
+        const stdout = await stream.collect({ maxBytes });
+        const result = await stream.finished;
+        const latency = performance.now() - startTime;
+
+        if (result.code !== 0) {
+          // Check for lock contention
+          const isLocked = result.stderr.includes('index.lock') || result.stderr.includes('.lock');
+          if (isLocked && attempt < maxAttempts) {
+            const backoff = Math.pow(2, attempt) * 100; // 200ms, 400ms, 800ms
+            await new Promise(resolve => setTimeout(resolve, backoff));
+            continue;
+          }
+
+          throw new GitPlumbingError(`Git command failed with code ${result.code}`, 'GitPlumbing.execute', {
+            args,
+            stderr: result.stderr,
+            stdout,
+            code: result.code,
+            traceId,
+            latency,
+            timedOut: result.timedOut
+          });
+        }
+
+        return stdout.trim();
+      } catch (err) {
+        if (err instanceof GitPlumbingError) {
+          throw err;
+        }
+        throw new GitPlumbingError(err.message, 'GitPlumbing.execute', { 
+          args, 
+          originalError: err, 
+          traceId,
+          latency: performance.now() - startTime
         });
       }
-
-      return stdout.trim();
-    } catch (err) {
-      if (err instanceof GitPlumbingError) {throw err;}
-      throw new GitPlumbingError(err.message, 'GitPlumbing.execute', { args, originalError: err });
     }
   }
 
@@ -121,7 +156,9 @@ export default class GitPlumbing {
       const result = await this.runner(options);
       return new GitStream(result.stdoutStream, result.exitPromise);
     } catch (err) {
-      if (err instanceof GitPlumbingError) {throw err;}
+      if (err instanceof GitPlumbingError) {
+        throw err;
+      }
       throw new GitPlumbingError(err.message, 'GitPlumbing.executeStream', { args, originalError: err });
     }
   }
@@ -134,17 +171,23 @@ export default class GitPlumbing {
    * @returns {Promise<{stdout: string, status: number}>}
    */
   async executeWithStatus({ args, maxBytes }) {
+    const startTime = performance.now();
     try {
       const stream = await this.executeStream({ args });
       const stdout = await stream.collect({ maxBytes });
-      const { code } = await stream.finished;
+      const result = await stream.finished;
 
       return {
         stdout: stdout.trim(),
-        status: code || 0,
+        status: result.code || 0,
+        latency: performance.now() - startTime
       };
     } catch (err) {
-      throw new GitPlumbingError(err.message, 'GitPlumbing.executeWithStatus', { args, originalError: err });
+      throw new GitPlumbingError(err.message, 'GitPlumbing.executeWithStatus', { 
+        args, 
+        originalError: err,
+        latency: performance.now() - startTime
+      });
     }
   }
 
@@ -154,46 +197,5 @@ export default class GitPlumbing {
    */
   get emptyTree() {
     return GitSha.EMPTY_TREE_VALUE;
-  }
-
-  /**
-   * Resolves a revision to a full SHA.
-   * @param {Object} options
-   * @param {string} options.revision
-   * @returns {Promise<string>}
-   * @throws {GitPlumbingError}
-   */
-  async revParse({ revision }) {
-    const args = GitCommandBuilder.revParse().arg(revision).build();
-    return await this.execute({ args });
-  }
-
-  /**
-   * Updates a reference to point to a new SHA.
-   * @param {Object} options
-   * @param {string} options.ref
-   * @param {GitSha|string} options.newSha
-   * @param {GitSha|string} [options.oldSha]
-   */
-  async updateRef({ ref, newSha, oldSha }) {
-    const gitNewSha = newSha instanceof GitSha ? newSha : new GitSha(newSha);
-    const gitOldSha = oldSha ? (oldSha instanceof GitSha ? oldSha : new GitSha(oldSha)) : null;
-
-    const args = GitCommandBuilder.updateRef()
-      .arg(ref)
-      .arg(gitNewSha.toString())
-      .arg(gitOldSha ? gitOldSha.toString() : null)
-      .build();
-    await this.execute({ args });
-  }
-
-  /**
-   * Deletes a reference.
-   * @param {Object} options
-   * @param {string} options.ref
-   */
-  async deleteRef({ ref }) {
-    const args = GitCommandBuilder.updateRef().delete().arg(ref).build();
-    await this.execute({ args });
   }
 }

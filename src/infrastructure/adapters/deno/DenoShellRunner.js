@@ -12,13 +12,36 @@ const DECODER = new TextDecoder();
  */
 export default class DenoShellRunner {
   /**
+   * List of environment variables allowed to be passed to the git process.
+   * @private
+   */
+  static _ALLOWED_ENV = [
+    'PATH',
+    'GIT_EXEC_PATH',
+    'GIT_TEMPLATE_DIR',
+    'GIT_CONFIG_NOSYSTEM',
+    'GIT_ATTR_NOSYSTEM',
+    'GIT_CONFIG_PARAMETERS'
+  ];
+
+  /**
    * Executes a command
    * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
    */
   async run({ command, args, cwd, input, timeout }) {
+    // Create a clean environment
+    const env = {};
+    for (const key of DenoShellRunner._ALLOWED_ENV) {
+      const val = Deno.env.get(key);
+      if (val !== undefined) {
+        env[key] = val;
+      }
+    }
+
     const cmd = new Deno.Command(command, {
       args,
       cwd,
+      env,
       stdin: 'piped', 
       stdout: 'piped',
       stderr: 'piped',
@@ -50,7 +73,7 @@ export default class DenoShellRunner {
         if (timeout) {
           timeoutId = setTimeout(() => {
             try { child.kill("SIGTERM"); } catch { /* ignore */ }
-            resolve({ code: 1, stderr: 'Command timed out' });
+            resolve({ code: 1, stderr: 'Command timed out', timedOut: true });
           }, timeout);
         }
       });
@@ -61,7 +84,7 @@ export default class DenoShellRunner {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
-        return { code, stderr };
+        return { code, stderr, timedOut: false };
       })();
 
       return Promise.race([completionPromise, timeoutPromise]);

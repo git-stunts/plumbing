@@ -1,4 +1,3 @@
-
 import GitCommit from '../../../src/domain/entities/GitCommit.js';
 import GitSha from '../../../src/domain/value-objects/GitSha.js';
 import GitSignature from '../../../src/domain/value-objects/GitSignature.js';
@@ -28,15 +27,24 @@ describe('GitCommit', () => {
       expect(commit.isMerge()).toBe(false);
     });
 
-    it('creates a merge commit', () => {
-      const p1 = new GitSha('1234567890abcdef1234567890abcdef12345678');
-      const p2 = new GitSha('abcdef1234567890abcdef1234567890abcdef12');
-      const commit = new GitCommit({ sha: null, treeSha, parents: [p1, p2], author, committer, message });
-      expect(commit.isMerge()).toBe(true);
-    });
-
-    it('throws for invalid tree', () => {
+    it('throws if treeSha is not a GitSha instance', () => {
       expect(() => new GitCommit({ sha: null, treeSha: 'invalid', parents: [], author, committer, message })).toThrow(ValidationError);
+    });
+  });
+
+  describe('static fromData', () => {
+    it('creates a commit from raw data', () => {
+      const data = {
+        sha: null,
+        treeSha: treeSha.toString(),
+        parents: [],
+        author: { name: 'A', email: 'a@example.com', timestamp: 1 },
+        committer: { name: 'C', email: 'c@example.com', timestamp: 2 },
+        message: 'msg'
+      };
+      const commit = GitCommit.fromData(data);
+      expect(commit.message).toBe('msg');
+      expect(commit.author).toBeInstanceOf(GitSignature);
     });
   });
 

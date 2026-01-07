@@ -9,36 +9,51 @@ import ValidationError from '../errors/ValidationError.js';
 import { GitTreeSchema } from '../schemas/GitTreeSchema.js';
 
 /**
+ * @typedef {import('../schemas/GitTreeSchema.js').GitTree} GitTreeData
+ */
+
+/**
  * Represents a Git tree object
  */
 export default class GitTree {
   /**
-   * @param {GitSha|string|null} sha
-   * @param {GitTreeEntry[]} entries
+   * @param {GitSha|null} sha - The tree SHA
+   * @param {GitTreeEntry[]} entries - Array of GitTreeEntry instances
    */
-  constructor(sha, entries = []) {
-    const data = {
-      sha: sha instanceof GitSha ? sha.toString() : sha,
-      entries: entries.map(e => (e instanceof GitTreeEntry ? e.toJSON() : e))
-    };
+  constructor(sha = null, entries = []) {
+    if (sha !== null && !(sha instanceof GitSha)) {
+      throw new ValidationError('SHA must be a GitSha instance or null', 'GitTree.constructor');
+    }
+    
+    // Enforce that entries are GitTreeEntry instances
+    this._entries = entries.map(entry => {
+      if (!(entry instanceof GitTreeEntry)) {
+        throw new ValidationError('All entries must be GitTreeEntry instances', 'GitTree.constructor');
+      }
+      return entry;
+    });
 
+    this.sha = sha;
+  }
+
+  /**
+   * Factory method to create a GitTree from raw data with validation.
+   * @param {GitTreeData} data
+   * @returns {GitTree}
+   */
+  static fromData(data) {
     const result = GitTreeSchema.safeParse(data);
     if (!result.success) {
       throw new ValidationError(
-        `Invalid tree: ${result.error.errors[0].message}`,
-        'GitTree.constructor',
+        `Invalid tree data: ${result.error.errors[0].message}`,
+        'GitTree.fromData',
         { data, errors: result.error.errors }
       );
     }
 
-    this.sha = sha instanceof GitSha ? sha : (result.data.sha ? new GitSha(result.data.sha) : null);
-    this._entries = entries.map((e, i) => {
-      if (e instanceof GitTreeEntry) {
-        return e;
-      }
-      const d = result.data.entries[i];
-      return new GitTreeEntry(d.mode, d.sha, d.path);
-    });
+    const sha = result.data.sha ? new GitSha(result.data.sha) : null;
+    const entries = result.data.entries.map(e => new GitTreeEntry(e));
+    return new GitTree(sha, entries);
   }
 
   /**
@@ -87,7 +102,7 @@ export default class GitTree {
 
   /**
    * Returns a JSON representation of the tree
-   * @returns {Object}
+   * @returns {GitTreeData}
    */
   toJSON() {
     return {
