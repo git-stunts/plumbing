@@ -8,12 +8,12 @@ import { RunnerOptionsSchema, DEFAULT_MAX_BUFFER_SIZE } from './src/ports/Runner
 import GitSha from './src/domain/value-objects/GitSha.js';
 import GitPlumbingError from './src/domain/errors/GitPlumbingError.js';
 import InvalidArgumentError from './src/domain/errors/InvalidArgumentError.js';
-import GitRepositoryLockedError from './src/domain/errors/GitRepositoryLockedError.js';
 import CommandRetryPolicy from './src/domain/value-objects/CommandRetryPolicy.js';
 import CommandSanitizer from './src/domain/services/CommandSanitizer.js';
 import GitStream from './src/infrastructure/GitStream.js';
 import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactory.js';
 import GitRepositoryService from './src/domain/services/GitRepositoryService.js';
+import ExecutionOrchestrator from './src/domain/services/ExecutionOrchestrator.js';
 
 /**
  * GitPlumbing provides a low-level, robust interface for executing Git plumbing commands.
@@ -107,60 +107,17 @@ export default class GitPlumbing {
     traceId = Math.random().toString(36).substring(7),
     retryPolicy = CommandRetryPolicy.default()
   }) {
-    let attempt = 0;
-
-    while (attempt < retryPolicy.maxAttempts) {
-      const startTime = performance.now();
-      attempt++;
-
-      try {
-        const stream = await this.executeStream({ args, input, traceId });
+    return ExecutionOrchestrator.orchestrate({
+      execute: async () => {
+        const stream = await this.executeStream({ args, input });
         const stdout = await stream.collect({ maxBytes, asString: true });
         const result = await stream.finished;
-        const latency = performance.now() - startTime;
-
-        if (result.code !== 0) {
-          // Check for lock contention
-          const isLocked = result.stderr.includes('index.lock') || result.stderr.includes('.lock');
-          if (isLocked) {
-            if (attempt < retryPolicy.maxAttempts) {
-              const backoff = retryPolicy.getDelay(attempt + 1);
-              await new Promise(resolve => setTimeout(resolve, backoff));
-              continue;
-            }
-            throw new GitRepositoryLockedError(`Git command failed: repository is locked`, 'GitPlumbing.execute', {
-              args,
-              stderr: result.stderr,
-              code: result.code,
-              traceId,
-              latency
-            });
-          }
-
-          throw new GitPlumbingError(`Git command failed with code ${result.code}`, 'GitPlumbing.execute', {
-            args,
-            stderr: result.stderr,
-            stdout,
-            code: result.code,
-            traceId,
-            latency,
-            timedOut: result.timedOut
-          });
-        }
-
-        return stdout.trim();
-      } catch (err) {
-        if (err instanceof GitPlumbingError) {
-          throw err;
-        }
-        throw new GitPlumbingError(err.message, 'GitPlumbing.execute', { 
-          args, 
-          originalError: err, 
-          traceId,
-          latency: performance.now() - startTime
-        });
-      }
-    }
+        return { stdout, result };
+      },
+      retryPolicy,
+      args,
+      traceId
+    });
   }
 
   /**

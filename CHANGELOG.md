@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.2.0] - 2026-01-07
 
 ### Added
+- **ExecutionOrchestrator**: Extracted command execution lifecycle (retry, backoff, lock detection) into a dedicated domain service to improve SRP compliance.
 - **Binary Stream Support**: Refactored `GitStream.collect()` to support raw `Uint8Array` accumulation, preventing corruption of non-UTF8 binary data (e.g., blobs, compressed trees).
 - **GitRepositoryLockedError**: Introduced a specialized error for repository lock contention with remediation guidance.
 - **CommandRetryPolicy**: Added a new value object to encapsulate configurable retry strategies and backoff logic.
