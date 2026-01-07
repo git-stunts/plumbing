@@ -1,4 +1,10 @@
+import path from 'node:path';
+import fs from 'node:fs';
 import { RunnerOptionsSchema, RunnerResultSchema } from './contract.js';
+import GitPlumbingError from './src/domain/errors/GitPlumbingError.js';
+import InvalidArgumentError from './src/domain/errors/InvalidArgumentError.js';
+import CommandSanitizer from './src/domain/services/CommandSanitizer.js';
+import GitCommandBuilder from './src/domain/services/GitCommandBuilder.js';
 
 /**
  * GitPlumbing provides a low-level, robust interface for executing Git plumbing commands.
@@ -12,21 +18,45 @@ export default class GitPlumbing {
    */
   constructor({ runner, cwd = process.cwd() }) {
     if (typeof runner !== 'function') {
-      throw new Error('A functional runner is required for GitPlumbing');
+      throw new InvalidArgumentError('A functional runner is required for GitPlumbing', 'GitPlumbing.constructor');
     }
+    
+    // Validate CWD
+    const resolvedCwd = path.resolve(cwd);
+    if (!fs.existsSync(resolvedCwd) || !fs.statSync(resolvedCwd).isDirectory()) {
+      throw new InvalidArgumentError(`Invalid working directory: ${cwd}`, 'GitPlumbing.constructor', { cwd });
+    }
+
     this.runner = runner;
-    this.cwd = cwd;
+    this.cwd = resolvedCwd;
+  }
+
+  /**
+   * Verifies that the git binary is available.
+   * @throws {GitPlumbingError}
+   */
+  async verifyInstallation() {
+    try {
+      await this.execute({ args: ['--version'] });
+    } catch (err) {
+      throw new GitPlumbingError('Git binary not found or inaccessible', 'GitPlumbing.verifyInstallation', { 
+        originalError: err.message,
+        code: 'GIT_NOT_FOUND'
+      });
+    }
   }
 
   /**
    * Executes a git command asynchronously.
    * @param {Object} options
    * @param {string[]} options.args - Array of git arguments.
-   * @param {string|Buffer} [options.input] - Optional stdin input.
+   * @param {string|Uint8Array} [options.input] - Optional stdin input.
    * @returns {Promise<string>} - The trimmed stdout.
-   * @throws {Error} - If the command fails (non-zero exit code).
+   * @throws {GitPlumbingError} - If the command fails.
    */
   async execute({ args, input }) {
+    CommandSanitizer.sanitize(args);
+
     const options = RunnerOptionsSchema.parse({
       command: 'git',
       args,
@@ -34,19 +64,24 @@ export default class GitPlumbing {
       input,
     });
 
-    const rawResult = await this.runner(options);
-    const result = RunnerResultSchema.parse(rawResult);
+    try {
+      const rawResult = await this.runner(options);
+      const result = RunnerResultSchema.parse(rawResult);
 
-    if (result.code !== 0 && result.code !== undefined) {
-      const err = new Error(`Git command failed with code ${result.code}: git ${args.join(' ')}
-${result.stderr}`);
-      err.stdout = result.stdout;
-      err.stderr = result.stderr;
-      err.code = result.code;
-      throw err;
+      if (result.code !== 0 && result.code !== undefined) {
+        throw new GitPlumbingError(`Git command failed with code ${result.code}`, 'GitPlumbing.execute', {
+          args,
+          stderr: result.stderr,
+          stdout: result.stdout,
+          code: result.code
+        });
+      }
+
+      return result.stdout.trim();
+    } catch (err) {
+      if (err instanceof GitPlumbingError) {throw err;}
+      throw new GitPlumbingError(err.message, 'GitPlumbing.execute', { args, originalError: err });
     }
-
-    return result.stdout.trim();
   }
 
   /**
@@ -56,19 +91,25 @@ ${result.stderr}`);
    * @returns {Promise<{stdout: string, status: number}>}
    */
   async executeWithStatus({ args }) {
+    CommandSanitizer.sanitize(args);
+
     const options = RunnerOptionsSchema.parse({
       command: 'git',
       args,
       cwd: this.cwd,
     });
 
-    const rawResult = await this.runner(options);
-    const result = RunnerResultSchema.parse(rawResult);
+    try {
+      const rawResult = await this.runner(options);
+      const result = RunnerResultSchema.parse(rawResult);
 
-    return {
-      stdout: result.stdout.trim(),
-      status: result.code || 0,
-    };
+      return {
+        stdout: result.stdout.trim(),
+        status: result.code || 0,
+      };
+    } catch (err) {
+      throw new GitPlumbingError(err.message, 'GitPlumbing.executeWithStatus', { args, originalError: err });
+    }
   }
 
   /**
@@ -83,14 +124,12 @@ ${result.stderr}`);
    * Resolves a revision to a full SHA.
    * @param {Object} options
    * @param {string} options.revision
-   * @returns {Promise<string|null>}
+   * @returns {Promise<string>}
+   * @throws {GitPlumbingError}
    */
   async revParse({ revision }) {
-    try {
-      return await this.execute({ args: ['rev-parse', revision] });
-    } catch {
-      return null;
-    }
+    const args = GitCommandBuilder.revParse().arg(revision).build();
+    return await this.execute({ args });
   }
 
   /**
@@ -101,8 +140,11 @@ ${result.stderr}`);
    * @param {string} [options.oldSha]
    */
   async updateRef({ ref, newSha, oldSha }) {
-    const args = ['update-ref', ref, newSha];
-    if (oldSha) args.push(oldSha);
+    const args = GitCommandBuilder.updateRef()
+      .arg(ref)
+      .arg(newSha)
+      .arg(oldSha)
+      .build();
     await this.execute({ args });
   }
 
@@ -112,6 +154,7 @@ ${result.stderr}`);
    * @param {string} options.ref
    */
   async deleteRef({ ref }) {
-    await this.execute({ args: ['update-ref', '-d', ref] });
+    const args = GitCommandBuilder.updateRef().delete().arg(ref).build();
+    await this.execute({ args });
   }
 }

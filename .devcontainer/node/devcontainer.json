@@ -1,0 +1,18 @@
+{
+  "name": "Node.js (Git Stunts Plumbing)",
+  "build": {
+    "dockerfile": "../../Dockerfile.node",
+    "context": "../.."
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "vitest.explorer"
+      ]
+    }
+  },
+  "postCreateCommand": "npm install",
+  "remoteUser": "root"
+}

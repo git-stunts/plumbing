@@ -23,3 +23,7 @@ export const RunnerOptionsSchema = z.object({
  * @typedef {z.infer<typeof RunnerResultSchema>} RunnerResult
  * @typedef {z.infer<typeof RunnerOptionsSchema>} RunnerOptions
  */
+
+/**
+ * @typedef {function(RunnerOptions): Promise<RunnerResult>} CommandRunner
+ */

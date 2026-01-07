@@ -8,29 +8,36 @@ import InvalidGitObjectTypeError from '../errors/InvalidGitObjectTypeError.js';
  * Represents a Git object type
  */
 export default class GitObjectType {
-  static BLOB = 1;
-  static TREE = 2;
-  static COMMIT = 3;
-  static TAG = 4;
-  static OFS_DELTA = 6;
-  static REF_DELTA = 7;
+  static BLOB_INT = 1;
+  static TREE_INT = 2;
+  static COMMIT_INT = 3;
+  static TAG_INT = 4;
+  static OFS_DELTA_INT = 6;
+  static REF_DELTA_INT = 7;
+
+  static BLOB = 'blob';
+  static TREE = 'tree';
+  static COMMIT = 'commit';
+  static TAG = 'tag';
+  static OFS_DELTA = 'ofs-delta';
+  static REF_DELTA = 'ref-delta';
 
   static TYPE_MAP = {
-    [GitObjectType.BLOB]: 'blob',
-    [GitObjectType.TREE]: 'tree',
-    [GitObjectType.COMMIT]: 'commit',
-    [GitObjectType.TAG]: 'tag',
-    [GitObjectType.OFS_DELTA]: 'ofs-delta',
-    [GitObjectType.REF_DELTA]: 'ref-delta'
+    [GitObjectType.BLOB_INT]: GitObjectType.BLOB,
+    [GitObjectType.TREE_INT]: GitObjectType.TREE,
+    [GitObjectType.COMMIT_INT]: GitObjectType.COMMIT,
+    [GitObjectType.TAG_INT]: GitObjectType.TAG,
+    [GitObjectType.OFS_DELTA_INT]: GitObjectType.OFS_DELTA,
+    [GitObjectType.REF_DELTA_INT]: GitObjectType.REF_DELTA
   };
 
   static STRING_TO_INT = {
-    'blob': GitObjectType.BLOB,
-    'tree': GitObjectType.TREE,
-    'commit': GitObjectType.COMMIT,
-    'tag': GitObjectType.TAG,
-    'ofs-delta': GitObjectType.OFS_DELTA,
-    'ref-delta': GitObjectType.REF_DELTA
+    [GitObjectType.BLOB]: GitObjectType.BLOB_INT,
+    [GitObjectType.TREE]: GitObjectType.TREE_INT,
+    [GitObjectType.COMMIT]: GitObjectType.COMMIT_INT,
+    [GitObjectType.TAG]: GitObjectType.TAG_INT,
+    [GitObjectType.OFS_DELTA]: GitObjectType.OFS_DELTA,
+    [GitObjectType.REF_DELTA]: GitObjectType.REF_DELTA
   };
 
   /**
@@ -38,7 +45,7 @@ export default class GitObjectType {
    */
   constructor(type) {
     if (!GitObjectType.isValid(type)) {
-      throw new InvalidGitObjectTypeError(type, 'GitObjectType constructor');
+      throw new InvalidGitObjectTypeError(type, 'GitObjectType.constructor');
     }
     this._value = type;
   }
@@ -49,7 +56,7 @@ export default class GitObjectType {
    * @returns {boolean}
    */
   static isValid(type) {
-    if (typeof type !== 'number') return false;
+    if (typeof type !== 'number') {return false;}
     return Object.values(GitObjectType.STRING_TO_INT).includes(type);
   }
 
@@ -70,7 +77,7 @@ export default class GitObjectType {
   static fromString(type) {
     const typeNumber = GitObjectType.STRING_TO_INT[type];
     if (typeNumber === undefined) {
-      throw new InvalidGitObjectTypeError(type, 'GitObjectType fromString');
+      throw new InvalidGitObjectTypeError(type, 'GitObjectType.fromString');
     }
     return new GitObjectType(typeNumber);
   }
@@ -105,7 +112,7 @@ export default class GitObjectType {
    * @returns {boolean}
    */
   equals(other) {
-    if (!(other instanceof GitObjectType)) return false;
+    if (!(other instanceof GitObjectType)) {return false;}
     return this._value === other._value;
   }
 
@@ -114,7 +121,7 @@ export default class GitObjectType {
    * @returns {GitObjectType}
    */
   static blob() {
-    return new GitObjectType(GitObjectType.BLOB);
+    return new GitObjectType(GitObjectType.BLOB_INT);
   }
 
   /**
@@ -122,7 +129,7 @@ export default class GitObjectType {
    * @returns {GitObjectType}
    */
   static tree() {
-    return new GitObjectType(GitObjectType.TREE);
+    return new GitObjectType(GitObjectType.TREE_INT);
   }
 
   /**
@@ -130,7 +137,7 @@ export default class GitObjectType {
    * @returns {GitObjectType}
    */
   static commit() {
-    return new GitObjectType(GitObjectType.COMMIT);
+    return new GitObjectType(GitObjectType.COMMIT_INT);
   }
 
   /**
@@ -138,7 +145,7 @@ export default class GitObjectType {
    * @returns {GitObjectType}
    */
   static tag() {
-    return new GitObjectType(GitObjectType.TAG);
+    return new GitObjectType(GitObjectType.TAG_INT);
   }
 
   /**
@@ -146,7 +153,7 @@ export default class GitObjectType {
    * @returns {GitObjectType}
    */
   static ofsDelta() {
-    return new GitObjectType(GitObjectType.OFS_DELTA);
+    return new GitObjectType(GitObjectType.OFS_DELTA_INT);
   }
 
   /**
@@ -154,7 +161,7 @@ export default class GitObjectType {
    * @returns {GitObjectType}
    */
   static refDelta() {
-    return new GitObjectType(GitObjectType.REF_DELTA);
+    return new GitObjectType(GitObjectType.REF_DELTA_INT);
   }
 
   /**
@@ -162,7 +169,7 @@ export default class GitObjectType {
    * @returns {boolean}
    */
   isBlob() {
-    return this._value === GitObjectType.BLOB;
+    return this._value === GitObjectType.BLOB_INT;
   }
 
   /**
@@ -170,7 +177,7 @@ export default class GitObjectType {
    * @returns {boolean}
    */
   isTree() {
-    return this._value === GitObjectType.TREE;
+    return this._value === GitObjectType.TREE_INT;
   }
 
   /**
@@ -178,7 +185,7 @@ export default class GitObjectType {
    * @returns {boolean}
    */
   isCommit() {
-    return this._value === GitObjectType.COMMIT;
+    return this._value === GitObjectType.COMMIT_INT;
   }
 
   /**
@@ -186,6 +193,6 @@ export default class GitObjectType {
    * @returns {boolean}
    */
   isTag() {
-    return this._value === GitObjectType.TAG;
+    return this._value === GitObjectType.TAG_INT;
   }
 }

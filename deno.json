@@ -1,0 +1,6 @@
+{
+  "tasks": {
+    "test": "deno test --quiet --no-check --allow-read --allow-run --allow-env --allow-write test/deno_entry.js"
+  },
+  "nodeModulesDir": "auto"
+}
