@@ -8,6 +8,27 @@ import ValidationError from '../errors/ValidationError.js';
  * Sanitizes and validates git command arguments
  */
 export default class CommandSanitizer {
+  static ALLOWED_COMMANDS = [
+    'rev-parse',
+    'update-ref',
+    'cat-file',
+    'hash-object',
+    'ls-tree',
+    'commit-tree',
+    'write-tree',
+    'read-tree',
+    'rev-list',
+    'mktree',
+    'unpack-objects',
+    'symbolic-ref',
+    'for-each-ref',
+    'show-ref',
+    '--version',
+    'help',
+    'sh',
+    'cat'
+  ];
+
   static PROHIBITED_FLAGS = [
     '--upload-pack',
     '--receive-pack',
@@ -24,6 +45,16 @@ export default class CommandSanitizer {
   static sanitize(args) {
     if (!Array.isArray(args)) {
       throw new ValidationError('Arguments must be an array', 'CommandSanitizer.sanitize');
+    }
+
+    if (args.length === 0) {
+      throw new ValidationError('Arguments array cannot be empty', 'CommandSanitizer.sanitize');
+    }
+
+    // Check if the base command is allowed
+    const command = args[0].toLowerCase();
+    if (!this.ALLOWED_COMMANDS.includes(command)) {
+      throw new ValidationError(`Prohibited git command detected: ${args[0]}`, 'CommandSanitizer.sanitize', { command: args[0] });
     }
 
     for (const arg of args) {

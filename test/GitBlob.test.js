@@ -1,4 +1,3 @@
-
 import GitBlob from '../src/domain/entities/GitBlob.js';
 import GitSha from '../src/domain/value-objects/GitSha.js';
 import InvalidArgumentError from '../src/domain/errors/InvalidArgumentError.js';
@@ -29,7 +28,8 @@ describe('GitBlob', () => {
 
     it('accepts binary content', () => {
       const blob = new GitBlob(null, HELLO_BYTES);
-      expect(blob.content).toBe(HELLO_BYTES);
+      // Use toEqual for structural equality since we now defensively copy
+      expect(blob.content).toEqual(HELLO_BYTES);
     });
   });
 
@@ -45,7 +45,7 @@ describe('GitBlob', () => {
       const blob = GitBlob.fromContent(HELLO_BYTES);
       expect(blob).toBeInstanceOf(GitBlob);
       expect(blob.sha).toBeNull();
-      expect(blob.content).toBe(HELLO_BYTES);
+      expect(blob.content).toEqual(HELLO_BYTES);
     });
   });
 

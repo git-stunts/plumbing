@@ -12,7 +12,7 @@ export default class BunShellRunner {
    * Executes a command
    * @type {import('../../../../contract.js').CommandRunner}
    */
-  async run({ command, args, cwd, input }) {
+  async run({ command, args, cwd, input, timeout, stream }) {
     const process = Bun.spawn([command, ...args], {
       cwd,
       stdin: 'pipe',
@@ -20,22 +20,53 @@ export default class BunShellRunner {
       stderr: 'pipe',
     });
 
-    if (input && process.stdin) {
-      const data = typeof input === 'string' ? new TextEncoder().encode(input) : input;
-      process.stdin.write(data);
-      process.stdin.end();
-    } else if (process.stdin) {
-      process.stdin.end();
+    if (stream) {
+      if (input) {
+        process.stdin.write(input);
+        process.stdin.end();
+      } else {
+        process.stdin.end();
+      }
+      return RunnerResultSchema.parse({
+        stdoutStream: process.stdout,
+        code: 0
+      });
     }
 
-    const stdout = await new Response(process.stdout).text();
-    const stderr = await new Response(process.stderr).text();
-    const code = await process.exited;
+    // Handle timeout for non-streaming
+    let timer;
+    if (timeout) {
+      timer = setTimeout(() => {
+        try { process.kill(); } catch { /* ignore */ }
+      }, timeout);
+    }
 
-    return RunnerResultSchema.parse({
-      stdout,
-      stderr,
-      code,
-    });
+    try {
+      if (input) {
+        process.stdin.write(input);
+        process.stdin.end();
+      } else {
+        process.stdin.end();
+      }
+
+      const stdoutPromise = new Response(process.stdout).text();
+      const stderrPromise = new Response(process.stderr).text();
+      
+      const [stdout, stderr, code] = await Promise.all([
+        stdoutPromise,
+        stderrPromise,
+        process.exited
+      ]);
+
+      return RunnerResultSchema.parse({
+        stdout,
+        stderr,
+        code,
+      });
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
   }
 }

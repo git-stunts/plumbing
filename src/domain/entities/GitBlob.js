@@ -20,7 +20,15 @@ export default class GitBlob {
       throw new InvalidArgumentError('SHA must be a GitSha instance or null', 'GitBlob.constructor', { sha });
     }
     this.sha = sha;
-    this.content = content;
+    this._content = content instanceof Uint8Array ? new Uint8Array(content) : content;
+  }
+
+  /**
+   * Returns the blob content
+   * @returns {string|Uint8Array}
+   */
+  get content() {
+    return this._content instanceof Uint8Array ? new Uint8Array(this._content) : this._content;
   }
 
   /**

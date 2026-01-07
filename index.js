@@ -1,10 +1,12 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { RunnerOptionsSchema, RunnerResultSchema } from './contract.js';
+import GitSha from './src/domain/value-objects/GitSha.js';
 import GitPlumbingError from './src/domain/errors/GitPlumbingError.js';
 import InvalidArgumentError from './src/domain/errors/InvalidArgumentError.js';
 import CommandSanitizer from './src/domain/services/CommandSanitizer.js';
 import GitCommandBuilder from './src/domain/services/GitCommandBuilder.js';
+import GitStream from './src/infrastructure/GitStream.js';
 
 /**
  * GitPlumbing provides a low-level, robust interface for executing Git plumbing commands.
@@ -85,6 +87,40 @@ export default class GitPlumbing {
   }
 
   /**
+   * Executes a git command asynchronously and returns a universal stream.
+   * @param {Object} options
+   * @param {string[]} options.args - Array of git arguments.
+   * @param {string|Uint8Array} [options.input] - Optional stdin input.
+   * @returns {Promise<GitStream>} - The unified stdout stream.
+   * @throws {GitPlumbingError} - If command setup fails.
+   */
+  async executeStream({ args, input }) {
+    CommandSanitizer.sanitize(args);
+
+    const options = RunnerOptionsSchema.parse({
+      command: 'git',
+      args,
+      cwd: this.cwd,
+      input,
+      stream: true
+    });
+
+    try {
+      const rawResult = await this.runner(options);
+      const result = RunnerResultSchema.parse(rawResult);
+
+      if (!result.stdoutStream) {
+        throw new GitPlumbingError('Failed to initialize command stream', 'GitPlumbing.executeStream', { args });
+      }
+
+      return new GitStream(result.stdoutStream);
+    } catch (err) {
+      if (err instanceof GitPlumbingError) {throw err;}
+      throw new GitPlumbingError(err.message, 'GitPlumbing.executeStream', { args, originalError: err });
+    }
+  }
+
+  /**
    * Specifically handles commands that might exit with 1 (like diff).
    * @param {Object} options
    * @param {string[]} options.args
@@ -136,14 +172,17 @@ export default class GitPlumbing {
    * Updates a reference to point to a new SHA.
    * @param {Object} options
    * @param {string} options.ref
-   * @param {string} options.newSha
-   * @param {string} [options.oldSha]
+   * @param {GitSha|string} options.newSha
+   * @param {GitSha|string} [options.oldSha]
    */
   async updateRef({ ref, newSha, oldSha }) {
+    const gitNewSha = newSha instanceof GitSha ? newSha : new GitSha(newSha);
+    const gitOldSha = oldSha ? (oldSha instanceof GitSha ? oldSha : new GitSha(oldSha)) : null;
+
     const args = GitCommandBuilder.updateRef()
       .arg(ref)
-      .arg(newSha)
-      .arg(oldSha)
+      .arg(gitNewSha.toString())
+      .arg(gitOldSha ? gitOldSha.toString() : null)
       .build();
     await this.execute({ args });
   }

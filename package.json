@@ -4,10 +4,24 @@
   "description": "Git Stunts Lego Block: plumbing",
   "type": "module",
   "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./ShellRunner": "./ShellRunner.js",
+    "./sha": "./src/domain/value-objects/GitSha.js",
+    "./ref": "./src/domain/value-objects/GitRef.js",
+    "./mode": "./src/domain/value-objects/GitFileMode.js",
+    "./signature": "./src/domain/value-objects/GitSignature.js",
+    "./errors": "./src/domain/errors/GitPlumbingError.js"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.0.0",
+    "deno": ">=1.40.0"
+  },
   "scripts": {
     "test": "./scripts/run-multi-runtime-tests.sh",
     "test:local": "vitest run --globals",
-    "prepare": "git config core.hooksPath scripts",
+    "prepare": "test -d .git && git config core.hooksPath scripts || true",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

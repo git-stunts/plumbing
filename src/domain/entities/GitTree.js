@@ -20,7 +20,15 @@ export default class GitTree {
       throw new InvalidArgumentError('SHA must be a GitSha instance or null', 'GitTree.constructor', { sha });
     }
     this.sha = sha;
-    this.entries = entries;
+    this._entries = [...entries];
+  }
+
+  /**
+   * Returns a copy of the tree entries
+   * @returns {GitTreeEntry[]}
+   */
+  get entries() {
+    return [...this._entries];
   }
 
   /**

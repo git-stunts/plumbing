@@ -2,6 +2,8 @@
  * @fileoverview Domain service for measuring byte size of content
  */
 
+const ENCODER = new TextEncoder();
+
 /**
  * Service to measure the byte size of different content types
  */
@@ -13,7 +15,7 @@ export default class ByteMeasurer {
    */
   static measure(content) {
     if (typeof content === 'string') {
-      return new TextEncoder().encode(content).length;
+      return ENCODER.encode(content).length;
     }
     return content.length;
   }

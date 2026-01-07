@@ -31,13 +31,13 @@ describe('GitTree', () => {
   });
 
   describe('addEntry', () => {
-    it('adds an entry and returns new tree', () => {
+    it('adds an entry and returns new tree (deprecated path, now O(N))', () => {
       const tree = new GitTree(null, []);
       const entry = new GitTreeEntry(regularMode, sha, 'file.txt');
       const newTree = tree.addEntry(entry);
       expect(newTree.entries).toHaveLength(1);
       expect(newTree.entries[0]).toBe(entry);
-      expect(tree.entries).toHaveLength(0); // Immutable-ish
+      expect(tree.entries).toHaveLength(0); // Immutable
     });
 
     it('throws when adding non-entry', () => {
