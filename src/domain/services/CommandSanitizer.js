@@ -48,9 +48,10 @@ export default class CommandSanitizer {
   ];
 
   /**
-   * Validates a list of arguments for potential injection or prohibited flags
-   * @param {string[]} args
-   * @throws {ValidationError}
+   * Validates a list of arguments for potential injection or prohibited flags.
+   * @param {string[]} args - The array of git arguments to sanitize.
+   * @returns {string[]} The validated arguments array.
+   * @throws {import('../errors/ValidationError.js').default} If validation fails.
    */
   static sanitize(args) {
     if (!Array.isArray(args)) {

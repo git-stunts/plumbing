@@ -1,16 +1,17 @@
 # @git-stunts/plumbing
 
-A low-level, robust, and environment-agnostic Git plumbing library for the modern JavaScript ecosystem. Built with Hexagonal Architecture and Domain-Driven Design (DDD), it provides a secure and type-safe interface for Git operations across **Node.js, Bun, and Deno**.
+A low-level, robust, and environment-agnostic Git plumbing library for the modern JavaScript ecosystem. Built with **Hexagonal Architecture** and **Domain-Driven Design (DDD)**, it provides a secure, streaming-first, and type-safe interface for Git operations across **Node.js, Bun, and Deno**.
 
 ## 🚀 Key Features
 
+- **Streaming-First Architecture**: Unified "Streaming Only" pattern across all runtimes for consistent, memory-efficient data handling.
 - **Multi-Runtime Support**: Native adapters for Node.js, Bun, and Deno with automatic environment detection.
+- **Robust Schema Validation**: Powered by **Zod**, ensuring every Entity and Value Object is valid before use.
 - **Hexagonal Architecture**: Strict separation between core domain logic and infrastructure adapters.
+- **OOM Protection**: Integrated safety buffering (`GitStream.collect`) with configurable byte limits.
 - **Type-Safe Domain**: Formalized Value Objects for `GitSha`, `GitRef`, `GitFileMode`, and `GitSignature`.
-- **Harden Security**: Integrated `CommandSanitizer` to prevent argument injection attacks.
-- **Robust Error Handling**: Domain-specific error hierarchy (`ValidationError`, `InvalidArgumentError`, etc.).
+- **Hardened Security**: Integrated `CommandSanitizer` to prevent argument injection attacks.
 - **Dockerized CI**: Parallel test execution across all runtimes using isolated containers.
-- **Developer Ergonomics**: Pre-configured Dev Containers and Git hooks for a seamless workflow.
 
 ## 📦 Installation
 
@@ -20,17 +21,30 @@ npm install @git-stunts/plumbing
 
 ## 🛠️ Usage
 
+### Zero-Config Initialization
+
+Version 2.0.0 introduces `createDefault()` which automatically detects your runtime and sets up the appropriate runner.
+
+```javascript
+import GitPlumbing from '@git-stunts/plumbing';
+
+const git = GitPlumbing.createDefault({ cwd: './my-repo' });
+
+// Securely resolve references
+const headSha = await git.revParse({ revision: 'HEAD' });
+```
+
 ### Core Entities
 
-The library uses immutable Value Objects to ensure data integrity before any shell command is executed.
+The library uses immutable Value Objects and Zod-validated Entities to ensure data integrity.
 
 ```javascript
 import { GitSha, GitRef, GitSignature } from '@git-stunts/plumbing';
 
-// Validate and normalize SHAs
+// Validate and normalize SHAs (throws ValidationError if invalid)
 const sha = new GitSha('a1b2c3d4e5f67890123456789012345678901234');
 
-// Safe reference handling
+// Safe reference handling (implements git-check-ref-format)
 const mainBranch = GitRef.branch('main');
 
 // Structured signatures
@@ -40,61 +54,39 @@ const author = new GitSignature({
 });
 ```
 
-### Executing Commands
+### Streaming Power
 
-`GitPlumbing` follows Dependency Inversion, allowing you to provide a custom runner or use the auto-detecting `ShellRunner`.
+All commands are streaming-first. You can consume them as async iterables or collect them with safety guards.
 
 ```javascript
-import GitPlumbing from '@git-stunts/plumbing';
-import ShellRunner from '@git-stunts/plumbing/ShellRunner';
+const stream = await git.executeStream({ args: ['cat-file', '-p', 'HEAD'] });
 
-const git = new GitPlumbing({ 
-  runner: ShellRunner.run,
-  cwd: './my-repo'
-});
+// Consume as async iterable
+for await (const chunk of stream) {
+  process.stdout.write(chunk);
+}
 
-// Securely resolve references
-const headSha = await git.revParse({ revision: 'HEAD' });
-
-// Update references
-await git.updateRef({ 
-  ref: 'refs/heads/feature', 
-  newSha: '...' 
-});
+// OR collect with OOM protection (default 10MB)
+const output = await stream.collect({ maxBytes: 1024 * 1024 });
 ```
 
 ## 🏗️ Architecture
 
 This project strictly adheres to modern engineering principles:
-- **One Class Per File**: For maximum maintainability.
-- **Single Responsibility Principle (SRP)**: Logic is isolated into Domain Entities, Value Objects, and Services.
-- **No Magic Values**: All internal constants and modes are encapsulated in static class properties.
+- **1 File = 1 Class/Concept**: Modular, focused files for maximum maintainability.
+- **Dependency Inversion (DI)**: Domain logic depends on functional ports, not runtime-specific APIs.
+- **No Magic Values**: All internal constants, timeouts, and buffer limits are centralized in the port layer.
+- **Serializability**: Every domain object implements `toJSON()` for seamless interoperability.
 
-```text
-src/
-├── domain/
-│   ├── entities/       # GitBlob, GitCommit, GitTree, GitTreeEntry
-│   ├── value-objects/  # GitSha, GitRef, GitFileMode, GitSignature
-│   └── services/       # CommandSanitizer, ByteMeasurer
-├── infrastructure/
-│   ├── adapters/       # node, bun, deno implementations
-│   └── factories/      # ShellRunnerFactory
-└── ports/              # Interfaces and contracts
-```
+For a deeper dive, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## 🧪 Testing
 
 We take cross-platform compatibility seriously. Our test suite runs in parallel across all supported runtimes using Docker.
 
-### Multi-Runtime Tests (Docker)
-This command spawns three isolated containers (Node, Bun, Deno) and verifies the entire library in parallel.
 ```bash
-npm test
-```
-
-### Local Testing
-```bash
-npm run test:local
+npm test          # Multi-runtime Docker tests
+npm run test:local # Local vitest run
 ```
 
 ## 💻 Development
@@ -106,8 +98,7 @@ Specialized environments are provided for each runtime. Open this project in VS 
 - `.devcontainer/deno`
 
 ### Git Hooks
-The project uses `core.hooksPath` to enforce quality:
-- **Pre-commit**: Runs ESLint to ensure code style.
+- **Pre-commit**: Runs ESLint to ensure code style and SRP adherence.
 - **Pre-push**: Runs the full Docker-based multi-runtime test suite.
 
 ## 📄 License

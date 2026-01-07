@@ -40,9 +40,9 @@ export default class GitCommandBuilder {
   }
 
   /**
-   * Adds a positional argument
-   * @param {string} arg
-   * @returns {GitCommandBuilder}
+   * Adds a positional argument to the command.
+   * @param {string|number|null|undefined} arg - The argument to add.
+   * @returns {GitCommandBuilder} This builder instance for chaining.
    */
   arg(arg) {
     if (arg !== undefined && arg !== null) {
