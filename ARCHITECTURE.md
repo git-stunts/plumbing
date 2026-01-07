@@ -1,6 +1,6 @@
 # Architecture & Design
 
-This project is built as a core building block for the **Continuum** causal operating system. It follows strict engineering standards to ensure it is the most robust Git plumbing library in the JavaScript ecosystem.
+This project is built as a robust, low-level building block for Git-based applications. It follows strict engineering standards to ensure it is the most reliable Git plumbing library in the JavaScript ecosystem.
 
 ## 🏗️ Hexagonal Architecture (Ports & Adapters)
 
