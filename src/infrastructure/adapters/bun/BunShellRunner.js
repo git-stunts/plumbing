@@ -3,37 +3,19 @@
  */
 
 import { RunnerResultSchema } from '../../../ports/RunnerResultSchema.js';
+import EnvironmentPolicy from '../../../domain/services/EnvironmentPolicy.js';
 
 /**
  * Executes shell commands using Bun.spawn and always returns a stream.
  */
 export default class BunShellRunner {
   /**
-   * List of environment variables allowed to be passed to the git process.
-   * @private
-   */
-  static _ALLOWED_ENV = [
-    'PATH',
-    'GIT_EXEC_PATH',
-    'GIT_TEMPLATE_DIR',
-    'GIT_CONFIG_NOSYSTEM',
-    'GIT_ATTR_NOSYSTEM',
-    'GIT_CONFIG_PARAMETERS'
-  ];
-
-  /**
    * Executes a command
    * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
    */
   async run({ command, args, cwd, input, timeout }) {
-    // Create a clean environment
-    const env = {};
-    const globalEnv = globalThis.process?.env || {};
-    for (const key of BunShellRunner._ALLOWED_ENV) {
-      if (globalEnv[key] !== undefined) {
-        env[key] = globalEnv[key];
-      }
-    }
+    // Create a clean environment using Domain Policy
+    const env = EnvironmentPolicy.filter(globalThis.process?.env || {});
 
     const process = Bun.spawn([command, ...args], {
       cwd,

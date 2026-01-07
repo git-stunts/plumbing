@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-01-07
+
+### Changed
+- **Validation Unification**: Completed the migration from `ajv` to `zod` for the entire library, reducing bundle size and unifying the type-safety engine.
+- **Security Hardening**: Expanded the `EnvironmentPolicy` whitelist to include `GIT_AUTHOR_TZ`, `GIT_COMMITTER_TZ`, and localization variables (`LANG`, `LC_ALL`, etc.) to ensure identity and encoding consistency.
+- **Universal Testing**: Updated the multi-runtime test suite to ensure 100% test parity across Node.js, Bun, and Deno, specifically adding missing builder and environment tests.
+
+### Added
+- **EnvironmentPolicy**: Extracted environment variable whitelisting into a dedicated domain service used by all shell runners.
+
 ## [2.2.0] - 2026-01-07
 
 ### Added

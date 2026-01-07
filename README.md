@@ -11,7 +11,8 @@ A low-level, robust, and environment-agnostic Git plumbing library for the moder
 - **Execution Orchestration**: Centralized retry and lock-detection logic for maximum reliability.
 - **OOM Protection**: Integrated safety buffering (`GitStream.collect`) with configurable byte limits.
 - **Type-Safe Domain**: Formalized Value Objects for `GitSha`, `GitRef`, `GitFileMode`, and `GitSignature`.
-- **Hardened Security**: Integrated `CommandSanitizer` to prevent argument injection attacks.
+- **Hardened Security**: Integrated `CommandSanitizer` to prevent argument injection attacks and `EnvironmentPolicy` for clean process isolation.
+- **Environment Variable Isolation**: Strict whitelisting of Git-related environment variables (`GIT_AUTHOR_*`, `LANG`, etc.) to prevent leakage and ensure identity consistency.
 - **Dockerized CI**: Parallel test execution across all runtimes using isolated containers.
 
 ## 📦 Installation
