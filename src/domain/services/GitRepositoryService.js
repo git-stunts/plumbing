@@ -22,6 +22,15 @@ export default class GitRepositoryService {
   }
 
   /**
+   * Persists any Git entity (Blob, Tree, or Commit) and returns its SHA.
+   * @param {import('../entities/GitBlob.js').default|import('../entities/GitTree.js').default|import('../entities/GitCommit.js').default} entity
+   * @returns {Promise<import('../value-objects/GitSha.js').default>}
+   */
+  async save(entity) {
+    return await this.persistence.persist(entity);
+  }
+
+  /**
    * Persists a blob.
    * @param {import('../entities/GitBlob.js').default} blob
    * @returns {Promise<GitSha>}

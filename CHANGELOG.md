@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-01-07
+
+### Added
+- **GitRepositoryService.save()**: Introduced a polymorphic persistence method that automatically delegates to the appropriate low-level operation based on the entity type (Blob, Tree, or Commit).
+- **Commit Lifecycle Guide**: Created `docs/COMMIT_LIFECYCLE.md`, a step-by-step tutorial covering manual graph construction and persistence.
+
+### Changed
+- **Documentation Overhaul**: Updated `README.md` with enhanced security details and prominent links to the new lifecycle guide.
+- **Process Isolation**: Hardened shell runners with strict environment variable whitelisting and support for per-call overrides.
+
 ## [2.6.0] - 2026-01-07
 
 ### Added

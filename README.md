@@ -13,7 +13,7 @@ A low-level, robust, and environment-agnostic Git plumbing library for the moder
 - **OOM Protection**: Integrated safety buffering (`GitStream.collect`) with configurable byte limits.
 - **Type-Safe Domain**: Formalized Value Objects for `GitSha`, `GitRef`, `GitFileMode`, and `GitSignature`.
 - **Hardened Security**: Integrated `CommandSanitizer` to prevent argument injection attacks and `EnvironmentPolicy` for clean process isolation.
-- **Environment Variable Isolation**: Strict whitelisting of Git-related environment variables (`GIT_AUTHOR_*`, `LANG`, etc.) to prevent leakage and ensure identity consistency.
+- **Process Isolation**: Every Git process runs in a sanitized environment, whitelisting only essential variables (`GIT_AUTHOR_*`, `LANG`, etc.) to prevent leakage.
 - **Dockerized CI**: Parallel test execution across all runtimes using isolated containers.
 
 ## 📦 Installation
@@ -142,6 +142,7 @@ For a deeper dive, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## 📖 Documentation
 
+- [**Git Commit Lifecycle**](./docs/COMMIT_LIFECYCLE.md) - **Recommended**: A step-by-step guide to building and persisting Git objects.
 - [**Architecture & Design**](./ARCHITECTURE.md) - Deep dive into the hexagonal architecture and design principles.
 - [**Workflow Recipes**](./docs/RECIPES.md) - Step-by-step guides for common Git plumbing tasks (e.g., manual commits).
 - [**Contributing**](./CONTRIBUTING.md) - Guidelines for contributing to the project.
