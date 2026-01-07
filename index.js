@@ -50,8 +50,9 @@ export default class GitPlumbing {
    * @returns {GitPlumbing}
    */
   static createDefault(options = {}) {
+    const env = options.env || globalThis.process?.env?.GIT_PLUMBING_ENV;
     return new GitPlumbing({
-      runner: ShellRunnerFactory.create({ env: options.env }),
+      runner: ShellRunnerFactory.create({ env }),
       ...options
     });
   }
