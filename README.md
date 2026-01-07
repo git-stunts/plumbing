@@ -23,15 +23,32 @@ npm install @git-stunts/plumbing
 
 ### Zero-Config Initialization
 
-Version 2.0.0 introduces `createDefault()` which automatically detects your runtime and sets up the appropriate runner.
+Version 2.0.0 introduces `createDefault()` which automatically detects your runtime and sets up the appropriate runner. Version 2.2.0 adds `createRepository()` for an even faster start.
 
 ```javascript
 import GitPlumbing from '@git-stunts/plumbing';
 
-const git = GitPlumbing.createDefault({ cwd: './my-repo' });
+// Get a high-level service in one line
+const git = GitPlumbing.createRepository({ cwd: './my-repo' });
 
 // Securely resolve references
 const headSha = await git.revParse({ revision: 'HEAD' });
+```
+
+### Custom Runners
+
+Extend the library for exotic environments like SSH or WASM.
+
+```javascript
+import GitPlumbing, { ShellRunnerFactory } from '@git-stunts/plumbing';
+
+class MySshRunner {
+  async run({ command, args }) { /* custom implementation */ }
+}
+
+ShellRunnerFactory.register('ssh', MySshRunner);
+
+const git = GitPlumbing.createDefault({ env: 'ssh' });
 ```
 
 ### Core Entities

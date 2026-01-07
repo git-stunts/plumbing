@@ -14,13 +14,34 @@ export default class ShellRunnerFactory {
   static ENV_DENO = 'deno';
   static ENV_NODE = 'node';
 
+  /** @private */
+  static _registry = new Map();
+
+  /**
+   * Registers a custom runner class.
+   * @param {string} name
+   * @param {Function} RunnerClass
+   */
+  static register(name, RunnerClass) {
+    this._registry.set(name, RunnerClass);
+  }
+
   /**
    * Creates a shell runner for the current environment
+   * @param {Object} [options]
+   * @param {string} [options.env] - Override environment detection.
    * @returns {import('../../ports/CommandRunnerPort.js').CommandRunner} A functional shell runner
    */
-  static create() {
-    const env = this._detectEnvironment();
+  static create(options = {}) {
+    const env = options.env || this._detectEnvironment();
     
+    // Check registry first
+    if (this._registry.has(env)) {
+      const RunnerClass = this._registry.get(env);
+      const runner = new RunnerClass();
+      return runner.run.bind(runner);
+    }
+
     const runners = {
       [this.ENV_BUN]: BunShellRunner,
       [this.ENV_DENO]: DenoShellRunner,
@@ -28,6 +49,10 @@ export default class ShellRunnerFactory {
     };
 
     const RunnerClass = runners[env];
+    if (!RunnerClass) {
+      throw new Error(`Unsupported environment: ${env}`);
+    }
+
     const runner = new RunnerClass();
     return runner.run.bind(runner);
   }

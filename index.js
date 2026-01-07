@@ -8,9 +8,12 @@ import { RunnerOptionsSchema, DEFAULT_MAX_BUFFER_SIZE } from './src/ports/Runner
 import GitSha from './src/domain/value-objects/GitSha.js';
 import GitPlumbingError from './src/domain/errors/GitPlumbingError.js';
 import InvalidArgumentError from './src/domain/errors/InvalidArgumentError.js';
+import GitRepositoryLockedError from './src/domain/errors/GitRepositoryLockedError.js';
+import CommandRetryPolicy from './src/domain/value-objects/CommandRetryPolicy.js';
 import CommandSanitizer from './src/domain/services/CommandSanitizer.js';
 import GitStream from './src/infrastructure/GitStream.js';
 import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactory.js';
+import GitRepositoryService from './src/domain/services/GitRepositoryService.js';
 
 /**
  * GitPlumbing provides a low-level, robust interface for executing Git plumbing commands.
@@ -43,13 +46,24 @@ export default class GitPlumbing {
    * Factory method to create an instance with the default shell runner for the current environment.
    * @param {Object} [options]
    * @param {string} [options.cwd]
+   * @param {string} [options.env] - Override environment detection.
    * @returns {GitPlumbing}
    */
   static createDefault(options = {}) {
     return new GitPlumbing({
-      runner: ShellRunnerFactory.create(),
+      runner: ShellRunnerFactory.create({ env: options.env }),
       ...options
     });
+  }
+
+  /**
+   * Factory method to create a high-level GitRepositoryService.
+   * @param {Object} [options]
+   * @returns {GitRepositoryService}
+   */
+  static createRepository(options = {}) {
+    const plumbing = GitPlumbing.createDefault(options);
+    return new GitRepositoryService({ plumbing });
   }
 
   /**
@@ -82,14 +96,20 @@ export default class GitPlumbing {
    * @param {string|Uint8Array} [options.input] - Optional stdin input.
    * @param {number} [options.maxBytes=DEFAULT_MAX_BUFFER_SIZE] - Maximum buffer size.
    * @param {string} [options.traceId] - Correlation ID for the command.
+   * @param {CommandRetryPolicy} [options.retryPolicy] - Strategy for retrying failed commands.
    * @returns {Promise<string>} - The trimmed stdout.
    * @throws {GitPlumbingError} - If the command fails or buffer is exceeded.
    */
-  async execute({ args, input, maxBytes = DEFAULT_MAX_BUFFER_SIZE, traceId = Math.random().toString(36).substring(7) }) {
+  async execute({ 
+    args, 
+    input, 
+    maxBytes = DEFAULT_MAX_BUFFER_SIZE, 
+    traceId = Math.random().toString(36).substring(7),
+    retryPolicy = CommandRetryPolicy.default()
+  }) {
     let attempt = 0;
-    const maxAttempts = 3;
 
-    while (attempt < maxAttempts) {
+    while (attempt < retryPolicy.maxAttempts) {
       const startTime = performance.now();
       attempt++;
 
@@ -102,10 +122,19 @@ export default class GitPlumbing {
         if (result.code !== 0) {
           // Check for lock contention
           const isLocked = result.stderr.includes('index.lock') || result.stderr.includes('.lock');
-          if (isLocked && attempt < maxAttempts) {
-            const backoff = Math.pow(2, attempt) * 100; // 200ms, 400ms, 800ms
-            await new Promise(resolve => setTimeout(resolve, backoff));
-            continue;
+          if (isLocked) {
+            if (attempt < retryPolicy.maxAttempts) {
+              const backoff = retryPolicy.getDelay(attempt + 1);
+              await new Promise(resolve => setTimeout(resolve, backoff));
+              continue;
+            }
+            throw new GitRepositoryLockedError(`Git command failed: repository is locked`, 'GitPlumbing.execute', {
+              args,
+              stderr: result.stderr,
+              code: result.code,
+              traceId,
+              latency
+            });
           }
 
           throw new GitPlumbingError(`Git command failed with code ${result.code}`, 'GitPlumbing.execute', {
