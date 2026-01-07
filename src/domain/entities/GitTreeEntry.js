@@ -38,7 +38,7 @@ export default class GitTreeEntry {
     }
 
     this.mode = mode instanceof GitFileMode ? mode : new GitFileMode(result.data.mode);
-    this.sha = sha instanceof GitSha ? sha : new GitSha(result.data.sha);
+    this.sha = sha instanceof GitSha ? sha : GitSha.from(result.data.sha);
     this.path = result.data.path;
   }
 

@@ -31,7 +31,7 @@ export default class GitBlob {
       );
     }
 
-    this.sha = sha instanceof GitSha ? sha : (result.data.sha ? new GitSha(result.data.sha) : null);
+    this.sha = sha instanceof GitSha ? sha : (result.data.sha ? GitSha.from(result.data.sha) : null);
     this._content = result.data.content instanceof Uint8Array ? new Uint8Array(result.data.content) : result.data.content;
   }
 

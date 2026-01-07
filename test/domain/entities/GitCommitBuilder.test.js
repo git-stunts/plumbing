@@ -27,7 +27,7 @@ describe('GitCommitBuilder', () => {
 
   it('handles parents', () => {
     const parent1 = '1234567890abcdef1234567890abcdef12345678';
-    const parent2 = new GitSha('abcdef1234567890abcdef1234567890abcdef12');
+    const parent2 = GitSha.from('abcdef1234567890abcdef1234567890abcdef12');
     
     const builder = new GitCommitBuilder();
     const commit = builder

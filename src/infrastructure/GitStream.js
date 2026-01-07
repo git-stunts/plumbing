@@ -5,21 +5,6 @@
 import { DEFAULT_MAX_BUFFER_SIZE } from '../ports/RunnerOptionsSchema.js';
 
 /**
- * Registry for automatic cleanup of abandoned streams.
- */
-const REGISTRY = new FinalizationRegistry(async (stream) => {
-  try {
-    if (typeof stream.destroy === 'function') {
-      stream.destroy();
-    } else if (typeof stream.cancel === 'function') {
-      await stream.cancel();
-    }
-  } catch {
-    // Ignore errors in finalization
-  }
-});
-
-/**
  * GitStream provides a unified interface for consuming command output
  * across Node.js, Bun, and Deno runtimes.
  */
@@ -32,9 +17,6 @@ export default class GitStream {
     this._stream = stream;
     this.finished = exitPromise;
     this._consumed = false;
-
-    // Register for automatic cleanup if garbage collected before consumption
-    REGISTRY.register(this, stream, this);
   }
 
   /**
@@ -86,7 +68,8 @@ export default class GitStream {
 
     try {
       for await (const chunk of this) {
-        const bytes = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk;
+        // Optimized: Check for Uint8Array to avoid redundant encoding
+        const bytes = chunk instanceof Uint8Array ? chunk : new TextEncoder().encode(String(chunk));
         
         if (totalBytes + bytes.length > maxBytes) {
           throw new Error(`Buffer limit exceeded: ${maxBytes} bytes`);
@@ -121,7 +104,6 @@ export default class GitStream {
       throw new Error('Stream has already been consumed');
     }
     this._consumed = true;
-    REGISTRY.unregister(this);
 
     try {
       // Favor native async iterator if available (Node 10+, Deno, Bun)
@@ -153,7 +135,6 @@ export default class GitStream {
    * @returns {Promise<void>}
    */
   async destroy() {
-    REGISTRY.unregister(this);
     try {
       if (typeof this._stream.destroy === 'function') {
         this._stream.destroy();

@@ -51,7 +51,7 @@ export default class GitTree {
       );
     }
 
-    const sha = result.data.sha ? new GitSha(result.data.sha) : null;
+    const sha = result.data.sha ? GitSha.from(result.data.sha) : null;
     const entries = result.data.entries.map(e => new GitTreeEntry(e));
     return new GitTree(sha, entries);
   }

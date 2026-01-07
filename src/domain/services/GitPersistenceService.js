@@ -57,7 +57,7 @@ export default class GitPersistenceService {
       input: blob.content
     });
 
-    return new GitSha(shaStr.trim());
+    return GitSha.from(shaStr.trim());
   }
 
   /**
@@ -82,7 +82,7 @@ export default class GitPersistenceService {
       input
     });
 
-    return new GitSha(shaStr.trim());
+    return GitSha.from(shaStr.trim());
   }
 
   /**
@@ -117,6 +117,6 @@ export default class GitPersistenceService {
     
     const shaStr = await this.plumbing.execute({ args, env });
 
-    return new GitSha(shaStr.trim());
+    return GitSha.from(shaStr.trim());
   }
 }

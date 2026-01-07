@@ -1,6 +1,6 @@
 {
   "name": "@git-stunts/plumbing",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Git Stunts Lego Block: plumbing",
   "type": "module",
   "main": "index.js",

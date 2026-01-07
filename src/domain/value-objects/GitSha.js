@@ -18,43 +18,29 @@ export default class GitSha {
    * @param {string} sha - The SHA-1 hash string
    */
   constructor(sha) {
-    const result = GitShaSchema.safeParse(sha);
-    if (!result.success) {
-      throw new ValidationError(`Invalid SHA-1 hash: ${sha}`, 'GitSha.constructor', { sha });
-    }
-    this._value = result.data;
+    this._value = sha;
   }
 
   /**
-   * Validates if a string is a valid SHA-1 hash
-   * @param {string} sha
-   * @returns {boolean}
-   */
-  static isValid(sha) {
-    return GitShaSchema.safeParse(sha).success;
-  }
-
-  /**
-   * Creates a GitSha from a string, throwing if invalid
+   * Creates a GitSha from a string, throwing if invalid.
+   * Consolidates validation into a single entry point.
    * @param {string} sha
    * @returns {GitSha}
+   * @throws {ValidationError}
    */
-  static fromString(sha) {
-    return new GitSha(sha);
-  }
-
-  /**
-   * Creates a GitSha from a string, returning null if invalid
-   * @param {string} sha
-   * @returns {GitSha|null}
-   */
-  static fromStringOrNull(sha) {
-    try {
-      if (!GitSha.isValid(sha)) {return null;}
-      return new GitSha(sha);
-    } catch {
-      return null;
+  static from(sha) {
+    const result = GitShaSchema.safeParse(sha);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid SHA-1 hash: "${sha}". Must be a 40-character hexadecimal string.`,
+        'GitSha.from',
+        { 
+          sha,
+          helpUrl: 'https://git-scm.com/book/en/v2/Git-Internals-Git-Objects'
+        }
+      );
     }
+    return new GitSha(result.data);
   }
 
   /**

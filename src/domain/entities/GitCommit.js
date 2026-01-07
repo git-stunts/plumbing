@@ -63,9 +63,9 @@ export default class GitCommit {
     }
 
     return new GitCommit({
-      sha: result.data.sha ? new GitSha(result.data.sha) : null,
-      treeSha: new GitSha(result.data.treeSha),
-      parents: result.data.parents.map(p => new GitSha(p)),
+      sha: result.data.sha ? GitSha.from(result.data.sha) : null,
+      treeSha: GitSha.from(result.data.treeSha),
+      parents: result.data.parents.map(p => GitSha.from(p)),
       author: new GitSignature(result.data.author),
       committer: new GitSignature(result.data.committer),
       message: result.data.message

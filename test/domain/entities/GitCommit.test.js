@@ -19,7 +19,7 @@ describe('GitCommit', () => {
     });
 
     it('creates a commit with parents', () => {
-      const parent = new GitSha('1234567890abcdef1234567890abcdef12345678');
+      const parent = GitSha.from('1234567890abcdef1234567890abcdef12345678');
       const commit = new GitCommit({ sha: null, treeSha, parents: [parent], author, committer, message });
       expect(commit.parents).toHaveLength(1);
       expect(commit.parents[0].equals(parent)).toBe(true);

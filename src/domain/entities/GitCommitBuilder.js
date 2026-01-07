@@ -29,7 +29,7 @@ export default class GitCommitBuilder {
       this._sha = null;
       return this;
     }
-    this._sha = sha instanceof GitSha ? sha : new GitSha(sha);
+    this._sha = sha instanceof GitSha ? sha : GitSha.from(sha);
     return this;
   }
 
@@ -40,9 +40,9 @@ export default class GitCommitBuilder {
    */
   tree(tree) {
     if (tree && typeof tree === 'object' && 'sha' in tree) {
-      this._treeSha = tree.sha instanceof GitSha ? tree.sha : new GitSha(tree.sha);
+      this._treeSha = tree.sha instanceof GitSha ? tree.sha : GitSha.from(tree.sha);
     } else {
-      this._treeSha = tree instanceof GitSha ? tree : new GitSha(tree);
+      this._treeSha = tree instanceof GitSha ? tree : GitSha.from(tree);
     }
     return this;
   }
@@ -53,7 +53,7 @@ export default class GitCommitBuilder {
    * @returns {GitCommitBuilder}
    */
   parent(parentSha) {
-    const sha = parentSha instanceof GitSha ? parentSha : new GitSha(parentSha);
+    const sha = parentSha instanceof GitSha ? parentSha : GitSha.from(parentSha);
     this._parents.push(sha);
     return this;
   }
@@ -64,7 +64,7 @@ export default class GitCommitBuilder {
    * @returns {GitCommitBuilder}
    */
   parents(parents) {
-    this._parents = parents.map(p => (p instanceof GitSha ? p : new GitSha(p)));
+    this._parents = parents.map(p => (p instanceof GitSha ? p : GitSha.from(p)));
     return this;
   }
 

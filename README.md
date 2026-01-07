@@ -26,7 +26,7 @@ npm install @git-stunts/plumbing
 
 ### Zero-Config Initialization
 
-Version 2.0.0 introduces `createDefault()` which automatically detects your runtime and sets up the appropriate runner. Version 2.2.0 adds `createRepository()` for an even faster start.
+Version 2.0.0 introduces `createDefault()` and `createRepository()` which automatically detect your runtime and set up the appropriate runner for a fast, zero-config start.
 
 ```javascript
 import GitPlumbing from '@git-stunts/plumbing';
@@ -43,7 +43,7 @@ const commitSha = await git.commit({
   message: 'Feat: high-level orchestration',
   author: author,
   committer: author,
-  parents: [new GitSha(headSha)],
+  parents: [GitSha.from(headSha)],
   files: [
     { path: 'hello.txt', content: 'Hello World' },
     { path: 'script.sh', content: '#!/bin/sh\necho hi', mode: '100755' }
@@ -93,7 +93,7 @@ The library uses immutable Value Objects and Zod-validated Entities to ensure da
 import { GitSha, GitRef, GitSignature } from '@git-stunts/plumbing';
 
 // Validate and normalize SHAs (throws ValidationError if invalid)
-const sha = new GitSha('a1b2c3d4e5f67890123456789012345678901234');
+const sha = GitSha.from('a1b2c3d4e5f67890123456789012345678901234');
 
 // Safe reference handling (implements git-check-ref-format)
 const mainBranch = GitRef.branch('main');

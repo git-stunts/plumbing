@@ -76,8 +76,8 @@ export default class GitRepositoryService {
    * @param {import('../value-objects/GitSha.js').default|string} [options.oldSha]
    */
   async updateRef({ ref, newSha, oldSha }) {
-    const gitNewSha = newSha instanceof GitSha ? newSha : new GitSha(newSha);
-    const gitOldSha = oldSha ? (oldSha instanceof GitSha ? oldSha : new GitSha(oldSha)) : null;
+    const gitNewSha = newSha instanceof GitSha ? newSha : GitSha.from(newSha);
+    const gitOldSha = oldSha ? (oldSha instanceof GitSha ? oldSha : GitSha.from(oldSha)) : null;
 
     const args = GitCommandBuilder.updateRef()
       .arg(ref)
