@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-01-07
+
+### Added
+- **Binary Stream Support**: Refactored `GitStream.collect()` to support raw `Uint8Array` accumulation, preventing corruption of non-UTF8 binary data (e.g., blobs, compressed trees).
+
+### Changed
+- **Memory Optimization**: Enhanced `GitStream.collect()` to use chunk-based accumulation with `Uint8Array.set()`, reducing redundant string allocations during collection.
+- **Runtime Performance**: Optimized `ByteMeasurer` to use `Buffer.byteLength()` in Node.js and Bun, significantly improving performance for large string measurements.
+- **Development Tooling**: Upgraded `vitest` to version 3.0.0 for improved testing capabilities and performance.
+
 ## [2.1.0] - 2026-01-07
 
 ### Added

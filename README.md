@@ -67,7 +67,16 @@ for await (const chunk of stream) {
 }
 
 // OR collect with OOM protection (default 10MB)
-const output = await stream.collect({ maxBytes: 1024 * 1024 });
+const output = await stream.collect({ maxBytes: 1024 * 1024, asString: true });
+```
+
+### Binary Support
+
+You can now collect raw bytes to handle binary blobs without corruption.
+
+```javascript
+const stream = await git.executeStream({ args: ['cat-file', '-p', 'HEAD:image.png'] });
+const buffer = await stream.collect({ asString: false }); // Returns Uint8Array
 ```
 
 ## 🏗️ Architecture

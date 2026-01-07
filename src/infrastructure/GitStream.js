@@ -71,16 +71,18 @@ export default class GitStream {
   }
 
   /**
-   * Collects the entire stream into a string, with a safety limit on bytes.
+   * Collects the entire stream into a Uint8Array or string, with a safety limit on bytes.
+   * Uses an array of chunks to avoid redundant allocations.
    * @param {Object} options
    * @param {number} [options.maxBytes=DEFAULT_MAX_BUFFER_SIZE]
-   * @returns {Promise<string>}
+   * @param {boolean} [options.asString=false] - Whether to decode the final buffer to a string.
+   * @param {string} [options.encoding='utf-8'] - The encoding to use if asString is true.
+   * @returns {Promise<Uint8Array|string>}
    * @throws {Error} If maxBytes is exceeded.
    */
-  async collect({ maxBytes = DEFAULT_MAX_BUFFER_SIZE } = {}) {
-    const decoder = new TextDecoder();
+  async collect({ maxBytes = DEFAULT_MAX_BUFFER_SIZE, asString = false, encoding = 'utf-8' } = {}) {
+    const chunks = [];
     let totalBytes = 0;
-    let result = '';
 
     try {
       for await (const chunk of this) {
@@ -90,14 +92,25 @@ export default class GitStream {
           throw new Error(`Buffer limit exceeded: ${maxBytes} bytes`);
         }
 
+        chunks.push(bytes);
         totalBytes += bytes.length;
-        result += typeof chunk === 'string' ? chunk : decoder.decode(chunk);
       }
+
+      const result = new Uint8Array(totalBytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        result.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      if (asString) {
+        return new TextDecoder(encoding).decode(result);
+      }
+
+      return result;
     } finally {
       await this.destroy();
     }
-
-    return result;
   }
 
   /**

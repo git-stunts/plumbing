@@ -95,7 +95,7 @@ export default class GitPlumbing {
 
       try {
         const stream = await this.executeStream({ args, input, traceId });
-        const stdout = await stream.collect({ maxBytes });
+        const stdout = await stream.collect({ maxBytes, asString: true });
         const result = await stream.finished;
         const latency = performance.now() - startTime;
 
@@ -174,7 +174,7 @@ export default class GitPlumbing {
     const startTime = performance.now();
     try {
       const stream = await this.executeStream({ args });
-      const stdout = await stream.collect({ maxBytes });
+      const stdout = await stream.collect({ maxBytes, asString: true });
       const result = await stream.finished;
 
       return {
