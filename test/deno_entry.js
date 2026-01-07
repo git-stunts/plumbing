@@ -16,6 +16,7 @@ import "./domain/errors/Errors.test.js";
 import "./domain/services/ByteMeasurer.test.js";
 import "./domain/services/CommandSanitizer.test.js";
 import "./domain/services/EnvironmentPolicy.test.js";
+import "./domain/services/GitCommandBuilder.test.js";
 import "./domain/services/GitErrorClassifier.test.js";
 import "./domain/value-objects/GitFileMode.test.js";
 import "./domain/value-objects/GitObjectType.test.js";

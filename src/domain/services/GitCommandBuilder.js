@@ -14,20 +14,98 @@ export default class GitCommandBuilder {
     this._args = [command];
   }
 
+  // --- Static Factory Methods ---
+
+  static revParse() { return new GitCommandBuilder('rev-parse'); }
+  static updateRef() { return new GitCommandBuilder('update-ref'); }
+  static catFile() { return new GitCommandBuilder('cat-file'); }
+  static hashObject() { return new GitCommandBuilder('hash-object'); }
+  static lsTree() { return new GitCommandBuilder('ls-tree'); }
+  static commitTree() { return new GitCommandBuilder('commit-tree'); }
+  static writeTree() { return new GitCommandBuilder('write-tree'); }
+  static readTree() { return new GitCommandBuilder('read-tree'); }
+  static revList() { return new GitCommandBuilder('rev-list'); }
+  static mktree() { return new GitCommandBuilder('mktree'); }
+  static unpackObjects() { return new GitCommandBuilder('unpack-objects'); }
+  static symbolicRef() { return new GitCommandBuilder('symbolic-ref'); }
+  static forEachRef() { return new GitCommandBuilder('for-each-ref'); }
+  static showRef() { return new GitCommandBuilder('show-ref'); }
+  static diffTree() { return new GitCommandBuilder('diff-tree'); }
+  static diffIndex() { return new GitCommandBuilder('diff-index'); }
+  static diffFiles() { return new GitCommandBuilder('diff-files'); }
+  static mergeBase() { return new GitCommandBuilder('merge-base'); }
+  static lsFiles() { return new GitCommandBuilder('ls-files'); }
+  static checkIgnore() { return new GitCommandBuilder('check-ignore'); }
+  static checkAttr() { return new GitCommandBuilder('check-attr'); }
+  static version() { return new GitCommandBuilder('--version'); }
+  static init() { return new GitCommandBuilder('init'); }
+  static config() { return new GitCommandBuilder('config'); }
+
+  // --- Fluent flag methods ---
+
   /**
-   * Starts building an update-ref command
+   * Adds the --stdin flag
    * @returns {GitCommandBuilder}
    */
-  static updateRef() {
-    return new GitCommandBuilder('update-ref');
+  stdin() {
+    this._args.push('--stdin');
+    return this;
   }
 
   /**
-   * Starts building a rev-parse command
+   * Adds the -w flag (write)
    * @returns {GitCommandBuilder}
    */
-  static revParse() {
-    return new GitCommandBuilder('rev-parse');
+  write() {
+    this._args.push('-w');
+    return this;
+  }
+
+  /**
+   * Adds the -p flag (pretty-print)
+   * @returns {GitCommandBuilder}
+   */
+  pretty() {
+    this._args.push('-p');
+    return this;
+  }
+
+  /**
+   * Adds the -t flag (type)
+   * @returns {GitCommandBuilder}
+   */
+  type() {
+    this._args.push('-t');
+    return this;
+  }
+
+  /**
+   * Adds the -s flag (size)
+   * @returns {GitCommandBuilder}
+   */
+  size() {
+    this._args.push('-s');
+    return this;
+  }
+
+  /**
+   * Adds the -m flag (message)
+   * @param {string} msg
+   * @returns {GitCommandBuilder}
+   */
+  message(msg) {
+    this._args.push('-m', msg);
+    return this;
+  }
+
+  /**
+   * Adds the -p flag (parent)
+   * @param {string} sha
+   * @returns {GitCommandBuilder}
+   */
+  parent(sha) {
+    this._args.push('-p', sha);
+    return this;
   }
 
   /**

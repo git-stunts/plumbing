@@ -14,6 +14,9 @@ import GitStream from './src/infrastructure/GitStream.js';
 import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactory.js';
 import GitRepositoryService from './src/domain/services/GitRepositoryService.js';
 import ExecutionOrchestrator from './src/domain/services/ExecutionOrchestrator.js';
+import GitCommandBuilder from './src/domain/services/GitCommandBuilder.js';
+
+export { GitCommandBuilder };
 
 /**
  * GitPlumbing provides a low-level, robust interface for executing Git plumbing commands.

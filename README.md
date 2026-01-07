@@ -54,6 +54,24 @@ ShellRunnerFactory.register('ssh', MySshRunner);
 const git = GitPlumbing.createDefault({ env: 'ssh' });
 ```
 
+### Fluent Command Building
+
+Construct complex plumbing commands with a type-safe, fluent API.
+
+```javascript
+import { GitCommandBuilder } from '@git-stunts/plumbing';
+
+const args = GitCommandBuilder.hashObject()
+  .write()
+  .stdin()
+  .build(); // ['hash-object', '-w', '--stdin']
+
+const catArgs = GitCommandBuilder.catFile()
+  .pretty()
+  .arg('HEAD:README.md')
+  .build(); // ['cat-file', '-p', 'HEAD:README.md']
+```
+
 ### Core Entities
 
 The library uses immutable Value Objects and Zod-validated Entities to ensure data integrity.

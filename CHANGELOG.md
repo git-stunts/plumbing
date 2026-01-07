@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-01-07
+
+### Added
+- **GitCommandBuilder Fluent API**: Added static factory methods for all whitelisted Git commands (e.g., `.hashObject()`, `.catFile()`, `.writeTree()`) and fluent flag methods (e.g., `.stdin()`, `.write()`, `.pretty()`) for a more expressive command building experience.
+
+### Changed
+- **GitPlumbing DI Support**: Updated the constructor to accept optional `sanitizer` and `orchestrator` instances, enabling full Dependency Injection for easier testing and customization of core logic.
+
 ## [2.4.0] - 2026-01-07
 
 ### Added
