@@ -4,6 +4,7 @@
 
 import GitSha from '../value-objects/GitSha.js';
 import GitCommandBuilder from './GitCommandBuilder.js';
+import GitPersistenceService from './GitPersistenceService.js';
 
 /**
  * GitRepositoryService provides high-level operations on a Git repository.
@@ -13,9 +14,38 @@ export default class GitRepositoryService {
   /**
    * @param {Object} options
    * @param {import('../../../index.js').default} options.plumbing - The plumbing service for execution.
+   * @param {GitPersistenceService} [options.persistence] - Injected persistence service.
    */
-  constructor({ plumbing }) {
+  constructor({ plumbing, persistence = new GitPersistenceService({ plumbing }) }) {
     this.plumbing = plumbing;
+    this.persistence = persistence;
+  }
+
+  /**
+   * Persists a blob.
+   * @param {import('../entities/GitBlob.js').default} blob
+   * @returns {Promise<GitSha>}
+   */
+  async writeBlob(blob) {
+    return await this.persistence.writeBlob(blob);
+  }
+
+  /**
+   * Persists a tree.
+   * @param {import('../entities/GitTree.js').default} tree
+   * @returns {Promise<GitSha>}
+   */
+  async writeTree(tree) {
+    return await this.persistence.writeTree(tree);
+  }
+
+  /**
+   * Persists a commit.
+   * @param {import('../entities/GitCommit.js').default} commit
+   * @returns {Promise<GitSha>}
+   */
+  async writeCommit(commit) {
+    return await this.persistence.writeCommit(commit);
   }
 
   /**

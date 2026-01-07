@@ -10,7 +10,7 @@ The codebase is strictly partitioned into three layers:
 Contains the business logic, entities, and value objects. It is **pure** and has zero dependencies on infrastructure or specific runtimes.
 - **Entities**: `GitCommit`, `GitTree`, `GitBlob`.
 - **Value Objects**: `GitSha`, `GitRef`, `GitFileMode`, `GitSignature`.
-- **Services**: `CommandSanitizer` (security), `ExecutionOrchestrator` (retry/backoff), `GitErrorClassifier`, `ByteMeasurer`.
+- **Services**: `CommandSanitizer` (security), `ExecutionOrchestrator` (retry/backoff), `GitErrorClassifier`, `GitPersistenceService`, `ByteMeasurer`.
 
 ### 2. The Ports (Contracts)
 Functional interfaces that define how the domain interacts with the outside world.

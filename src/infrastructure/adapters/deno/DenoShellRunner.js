@@ -16,9 +16,10 @@ export default class DenoShellRunner {
    * Executes a command
    * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
    */
-  async run({ command, args, cwd, input, timeout }) {
+  async run({ command, args, cwd, input, timeout, env: envOverrides }) {
     // Create a clean environment using Domain Policy
-    const env = EnvironmentPolicy.filter(Deno.env.toObject());
+    const baseEnv = EnvironmentPolicy.filter(Deno.env.toObject());
+    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
 
     const cmd = new Deno.Command(command, {
       args,

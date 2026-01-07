@@ -23,6 +23,7 @@ export const RunnerOptionsSchema = z.object({
   args: z.array(z.string()),
   cwd: z.string().optional(),
   input: z.union([z.string(), z.instanceof(Uint8Array)]).optional(),
+  env: z.record(z.string()).optional(),
   timeout: z.number().optional().default(DEFAULT_COMMAND_TIMEOUT),
 });
 

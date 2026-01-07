@@ -15,6 +15,10 @@ import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactor
 import GitRepositoryService from './src/domain/services/GitRepositoryService.js';
 import ExecutionOrchestrator from './src/domain/services/ExecutionOrchestrator.js';
 import GitCommandBuilder from './src/domain/services/GitCommandBuilder.js';
+import GitBlob from './src/domain/entities/GitBlob.js';
+import GitTree from './src/domain/entities/GitTree.js';
+import GitTreeEntry from './src/domain/entities/GitTreeEntry.js';
+import GitCommit from './src/domain/entities/GitCommit.js';
 
 export { GitCommandBuilder };
 
@@ -54,6 +58,52 @@ export default class GitPlumbing {
     this.sanitizer = sanitizer;
     /** @private */
     this.orchestrator = orchestrator;
+    /** @private */
+    this.repo = new GitRepositoryService({ plumbing: this });
+  }
+
+  /**
+   * Orchestrates a full commit sequence from content to reference update.
+   * @param {Object} options
+   * @param {string} options.branch - The reference to update (e.g., 'refs/heads/main')
+   * @param {string} options.message - Commit message
+   * @param {import('./src/domain/value-objects/GitSignature.js').default} options.author
+   * @param {import('./src/domain/value-objects/GitSignature.js').default} options.committer
+   * @param {import('./src/domain/value-objects/GitSha.js').default[]} options.parents
+   * @param {Array<{path: string, content: string|Uint8Array, mode: string}>} options.files
+   * @returns {Promise<GitSha>} The resulting commit SHA.
+   */
+  async commit({ branch, message, author, committer, parents, files }) {
+    // 1. Write Blobs
+    const entries = await Promise.all(files.map(async (file) => {
+      const blob = GitBlob.fromContent(file.content);
+      const sha = await this.repo.writeBlob(blob);
+      return new GitTreeEntry({
+        path: file.path,
+        sha,
+        mode: file.mode || '100644'
+      });
+    }));
+
+    // 2. Write Tree
+    const tree = new GitTree(null, entries);
+    const treeSha = await this.repo.writeTree(tree);
+
+    // 3. Write Commit
+    const commit = new GitCommit({
+      sha: null,
+      treeSha,
+      parents,
+      author,
+      committer,
+      message
+    });
+    const commitSha = await this.repo.writeCommit(commit);
+
+    // 4. Update Reference
+    await this.repo.updateRef({ ref: branch, newSha: commitSha });
+
+    return commitSha;
   }
 
   /**
@@ -120,13 +170,14 @@ export default class GitPlumbing {
   async execute({ 
     args, 
     input, 
+    env,
     maxBytes = DEFAULT_MAX_BUFFER_SIZE, 
     traceId = Math.random().toString(36).substring(7),
     retryPolicy = CommandRetryPolicy.default()
   }) {
     return this.orchestrator.orchestrate({
       execute: async () => {
-        const stream = await this.executeStream({ args, input });
+        const stream = await this.executeStream({ args, input, env });
         const stdout = await stream.collect({ maxBytes, asString: true });
         const result = await stream.finished;
         return { stdout, result };
@@ -142,10 +193,11 @@ export default class GitPlumbing {
    * @param {Object} options
    * @param {string[]} options.args - Array of git arguments.
    * @param {string|Uint8Array} [options.input] - Optional stdin input.
+   * @param {Object} [options.env] - Optional environment overrides.
    * @returns {Promise<GitStream>} - The unified stdout stream wrapper.
    * @throws {GitPlumbingError} - If command setup fails.
    */
-  async executeStream({ args, input }) {
+  async executeStream({ args, input, env }) {
     this.sanitizer.sanitize(args);
 
     const options = RunnerOptionsSchema.parse({
@@ -153,6 +205,7 @@ export default class GitPlumbing {
       args,
       cwd: this.cwd,
       input,
+      env
     });
 
     try {

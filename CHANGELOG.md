@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-01-07
+
+### Added
+- **GitPersistenceService**: New domain service for persisting Git entities (Blobs, Trees, Commits) to the object database using plumbing commands.
+- **GitPlumbing.commit()**: High-level orchestration method that handles the full sequence from content creation to reference update in a single atomic-like operation.
+- **Environment Overrides**: `GitPlumbing.execute()` now supports per-call environment variable overrides, enabling precise control over identity (`GIT_AUTHOR_*`) during execution.
+
+### Changed
+- **GitRepositoryService Enhancement**: Added `writeBlob`, `writeTree`, and `writeCommit` methods, delegating to the persistence layer.
+- **Runner Schema Evolution**: Updated `RunnerOptionsSchema` to include an optional `env` record for cross-runtime environment injection.
+
 ## [2.5.0] - 2026-01-07
 
 ### Added

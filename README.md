@@ -36,6 +36,19 @@ const git = GitPlumbing.createRepository({ cwd: './my-repo' });
 
 // Securely resolve references
 const headSha = await git.revParse({ revision: 'HEAD' });
+
+// Orchestrate a full commit in one call
+const commitSha = await git.commit({
+  branch: 'refs/heads/main',
+  message: 'Feat: high-level orchestration',
+  author: author,
+  committer: author,
+  parents: [new GitSha(headSha)],
+  files: [
+    { path: 'hello.txt', content: 'Hello World' },
+    { path: 'script.sh', content: '#!/bin/sh\necho hi', mode: '100755' }
+  ]
+});
 ```
 
 ### Custom Runners

@@ -15,9 +15,10 @@ export default class NodeShellRunner {
    * Executes a command
    * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
    */
-  async run({ command, args, cwd, input, timeout }) {
+  async run({ command, args, cwd, input, timeout, env: envOverrides }) {
     // Create a clean environment using Domain Policy
-    const env = EnvironmentPolicy.filter(globalThis.process?.env || {});
+    const baseEnv = EnvironmentPolicy.filter(globalThis.process?.env || {});
+    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
 
     const child = spawn(command, args, { cwd, env });
 
