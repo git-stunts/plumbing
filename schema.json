@@ -1,0 +1,21 @@
+{
+  "\$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GitStuntsRunnerContract",
+  "description": "Contract for the async runner that executes git commands",
+  "type": "object",
+  "required": ["command", "args"],
+  "properties": {
+    "command": { "type": "string", "const": "git" },
+    "args": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "cwd": { "type": "string" },
+    "input": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "object", "description": "Buffer representation" }
+      ]
+    }
+  }
+}
