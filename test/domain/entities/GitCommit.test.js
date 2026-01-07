@@ -14,7 +14,7 @@ describe('GitCommit', () => {
 
   describe('constructor', () => {
     it('creates a root commit', () => {
-      const commit = new GitCommit(null, tree, [], author, committer, message);
+      const commit = new GitCommit({ sha: null, tree, parents: [], author, committer, message });
       expect(commit.isRoot()).toBe(true);
       expect(commit.isMerge()).toBe(false);
       expect(commit.parents).toHaveLength(0);
@@ -22,7 +22,7 @@ describe('GitCommit', () => {
 
     it('creates a commit with parents', () => {
       const parent = GitSha.fromString('a1b2c3d4e5f67890123456789012345678901234');
-      const commit = new GitCommit(null, tree, [parent], author, committer, message);
+      const commit = new GitCommit({ sha: null, tree, parents: [parent], author, committer, message });
       expect(commit.isRoot()).toBe(false);
       expect(commit.parents).toHaveLength(1);
     });
@@ -30,19 +30,19 @@ describe('GitCommit', () => {
     it('creates a merge commit', () => {
       const p1 = GitSha.fromString('a1b2c3d4e5f67890123456789012345678901234');
       const p2 = GitSha.fromString('f1e2d3c4b5a697887766554433221100ffeeddcc');
-      const commit = new GitCommit(null, tree, [p1, p2], author, committer, message);
+      const commit = new GitCommit({ sha: null, tree, parents: [p1, p2], author, committer, message });
       expect(commit.isMerge()).toBe(true);
       expect(commit.parents).toHaveLength(2);
     });
 
     it('throws for invalid tree', () => {
-      expect(() => new GitCommit(null, {}, [], author, committer, message)).toThrow(InvalidArgumentError);
+      expect(() => new GitCommit({ sha: null, tree: {}, parents: [], author, committer, message })).toThrow(InvalidArgumentError);
     });
   });
 
   describe('type', () => {
     it('returns commit type', () => {
-      const commit = new GitCommit(null, tree, [], author, committer, message);
+      const commit = new GitCommit({ sha: null, tree, parents: [], author, committer, message });
       expect(commit.type().isCommit()).toBe(true);
     });
   });

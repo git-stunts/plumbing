@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { RunnerOptionsSchema, RunnerResultSchema } from './contract.js';
+import { RunnerOptionsSchema, RunnerResultSchema } from './src/ports/CommandRunnerPort.js';
 import GitSha from './src/domain/value-objects/GitSha.js';
 import GitPlumbingError from './src/domain/errors/GitPlumbingError.js';
 import InvalidArgumentError from './src/domain/errors/InvalidArgumentError.js';
@@ -15,7 +15,7 @@ import GitStream from './src/infrastructure/GitStream.js';
 export default class GitPlumbing {
   /**
    * @param {Object} options
-   * @param {import('./contract.js').CommandRunner} options.runner - The async function that executes shell commands.
+   * @param {import('./src/ports/CommandRunnerPort.js').CommandRunner} options.runner - The async function that executes shell commands.
    * @param {string} [options.cwd=process.cwd()] - The working directory for git operations.
    */
   constructor({ runner, cwd = process.cwd() }) {
@@ -113,7 +113,7 @@ export default class GitPlumbing {
         throw new GitPlumbingError('Failed to initialize command stream', 'GitPlumbing.executeStream', { args });
       }
 
-      return new GitStream(result.stdoutStream);
+      return new GitStream(result.stdoutStream, result.exitPromise);
     } catch (err) {
       if (err instanceof GitPlumbingError) {throw err;}
       throw new GitPlumbingError(err.message, 'GitPlumbing.executeStream', { args, originalError: err });

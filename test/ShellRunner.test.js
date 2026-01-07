@@ -12,22 +12,25 @@ describe('ShellRunner', () => {
   });
 
   it('captures stderr', async () => {
+    // hash-object with an invalid flag produces stderr and exit code 129
     const result = await ShellRunner.run({
-      command: 'sh',
-      args: ['-c', 'echo "test error message" >&2 && exit 1']
+      command: 'git',
+      args: ['hash-object', '--invalid-flag']
     });
 
-    expect(result.code).toBe(1);
-    expect(result.stderr).toContain('test error message');
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('unknown option');
   });
 
   it('handles stdin', async () => {
     const result = await ShellRunner.run({
-      command: 'cat',
-      args: [],
+      command: 'git',
+      args: ['hash-object', '--stdin'],
       input: 'hello world'
     });
 
-    expect(result.stdout).toBe('hello world');
+    expect(result.code).toBe(0);
+    // SHA1 for "hello world" is 95d09f2b10159347eece71399a7e2e907ea3df4f
+    expect(result.stdout.trim()).toBe('95d09f2b10159347eece71399a7e2e907ea3df4f');
   });
 });

@@ -2,7 +2,7 @@
  * @fileoverview Deno implementation of the shell command runner
  */
 
-import { RunnerResultSchema } from '../../../../contract.js';
+import { RunnerResultSchema } from '../../../ports/CommandRunnerPort.js';
 
 const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder();
@@ -13,7 +13,7 @@ const DECODER = new TextDecoder();
 export default class DenoShellRunner {
   /**
    * Executes a command
-   * @type {import('../../../../contract.js').CommandRunner}
+   * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
    */
   async run({ command, args, cwd, input, timeout, stream }) {
     const cmd = new Deno.Command(command, {
@@ -34,9 +34,44 @@ export default class DenoShellRunner {
       } else if (child.stdin) {
         await child.stdin.close();
       }
+
+      const stderrPromise = (async () => {
+        let stderr = '';
+        if (child.stderr) {
+          for await (const chunk of child.stderr) {
+            stderr += DECODER.decode(chunk);
+          }
+        }
+        return stderr;
+      })();
+
+      const exitPromise = (async () => {
+        let timeoutId;
+        const timeoutPromise = new Promise((resolve) => {
+          if (timeout) {
+            timeoutId = setTimeout(() => {
+              try { child.kill("SIGTERM"); } catch { /* ignore */ }
+              resolve({ code: 1, stderr: 'Command timed out' });
+            }, timeout);
+          }
+        });
+
+        const completionPromise = (async () => {
+          const { code } = await child.status;
+          const stderr = await stderrPromise;
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          return { code, stderr };
+        })();
+
+        return Promise.race([completionPromise, timeoutPromise]);
+      })();
+
       return RunnerResultSchema.parse({
         stdoutStream: child.stdout,
-        code: 0
+        code: 0,
+        exitPromise
       });
     }
 

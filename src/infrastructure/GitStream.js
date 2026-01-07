@@ -9,9 +9,11 @@
 export default class GitStream {
   /**
    * @param {ReadableStream|import('node:stream').Readable} stream
+   * @param {Promise<{code: number, stderr: string}>} [exitPromise]
    */
-  constructor(stream) {
+  constructor(stream, exitPromise = Promise.resolve({ code: 0, stderr: '' })) {
     this._stream = stream;
+    this.finished = exitPromise;
   }
 
   /**

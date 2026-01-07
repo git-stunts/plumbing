@@ -13,14 +13,15 @@ import InvalidArgumentError from '../errors/InvalidArgumentError.js';
  */
 export default class GitCommit {
   /**
-   * @param {GitSha|null} sha
-   * @param {GitTree} tree
-   * @param {GitSha[]} parents
-   * @param {GitSignature} author
-   * @param {GitSignature} committer
-   * @param {string} message
+   * @param {Object} options
+   * @param {GitSha|null} options.sha
+   * @param {GitTree} options.tree
+   * @param {GitSha[]} options.parents
+   * @param {GitSignature} options.author
+   * @param {GitSignature} options.committer
+   * @param {string} options.message
    */
-  constructor(sha, tree, parents, author, committer, message) {
+  constructor({ sha, tree, parents, author, committer, message }) {
     if (sha && !(sha instanceof GitSha)) {
       throw new InvalidArgumentError('SHA must be a GitSha instance or null', 'GitCommit.constructor', { sha });
     }
@@ -35,7 +36,7 @@ export default class GitCommit {
     }
     this.sha = sha;
     this.tree = tree;
-    this.parents = parents;
+    this.parents = [...parents];
     this.author = author;
     this.committer = committer;
     this.message = message;

@@ -3,7 +3,7 @@
  */
 
 import { execFile, spawn } from 'node:child_process';
-import { RunnerResultSchema } from '../../../../contract.js';
+import { RunnerResultSchema } from '../../../ports/CommandRunnerPort.js';
 
 /**
  * Executes shell commands using Node.js child_process.execFile or spawn
@@ -13,7 +13,7 @@ export default class NodeShellRunner {
 
   /**
    * Executes a command
-   * @type {import('../../../../contract.js').CommandRunner}
+   * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
    */
   async run({ command, args, cwd, input, timeout, stream }) {
     if (stream) {
@@ -48,21 +48,41 @@ export default class NodeShellRunner {
   async _runStream({ command, args, cwd, input, timeout }) {
     const child = spawn(command, args, { cwd });
 
-    if (input && child.stdin) {
-      child.stdin.write(input);
-      child.stdin.end();
+    if (child.stdin) {
+      if (input) {
+        child.stdin.end(input);
+      } else {
+        child.stdin.end();
+      }
     }
 
-    // Handle timeout
-    const timeoutId = setTimeout(() => {
-      child.kill();
-    }, timeout);
+    let stderr = '';
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
 
-    child.on('exit', () => clearTimeout(timeoutId));
+    const exitPromise = new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        child.kill();
+        resolve({ code: 1, stderr: 'Command timed out' });
+      }, timeout);
+
+      child.on('exit', (code) => {
+        clearTimeout(timeoutId);
+        // console.log(`Process exited with code ${code}, stderr: ${stderr}`);
+        resolve({ code: code ?? 1, stderr });
+      });
+
+      child.on('error', (err) => {
+        clearTimeout(timeoutId);
+        resolve({ code: 1, stderr: err.message });
+      });
+    });
 
     return RunnerResultSchema.parse({
       stdoutStream: child.stdout,
-      code: 0 // Code is only known after exit, but for streaming we return immediately
+      code: 0,
+      exitPromise
     });
   }
 }

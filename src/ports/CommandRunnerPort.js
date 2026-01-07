@@ -8,6 +8,7 @@ export const RunnerResultSchema = z.object({
   stderr: z.string().optional(),
   code: z.number().optional().default(0),
   stdoutStream: z.any().optional(), // ReadableStream or similar
+  exitPromise: z.instanceof(Promise).optional(), // Resolves to {code, stderr} when process ends
 });
 
 /**

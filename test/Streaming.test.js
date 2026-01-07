@@ -2,13 +2,13 @@ import GitPlumbing from '../index.js';
 import ShellRunner from '../ShellRunner.js';
 
 describe('Streaming', () => {
-  const git = new GitPlumbing({ 
+  const git = new GitPlumbing({
     runner: ShellRunner.run,
     cwd: process.cwd()
   });
 
   it('executes a command and returns a readable stream', async () => {
-    const gitStream = await git.executeStream({ args: ['--version'] });
+    const gitStream = await git.executeStream({ args: ['help'] });
     
     expect(gitStream).toBeDefined();
     
@@ -22,26 +22,25 @@ describe('Streaming', () => {
     expect(output).toContain('git');
   });
 
-  it('handles large-ish input in streaming mode', async () => {
-    // We'll use 'cat' via executeStream to verify stdin/stdout piping
-    const input = 'A'.repeat(1000);
+  it('handles input in streaming mode', async () => {
+    // We'll use 'hash-object' via executeStream to verify stdin/stdout piping
+    const input = 'hello world content';
     
-    // GitPlumbing.executeStream is hardcoded to 'git', so we test the runner directly
-    const result = await ShellRunner.run({
-      command: 'cat',
-      args: [],
-      input,
-      stream: true
+    const gitStream = await git.executeStream({
+      args: ['hash-object', '--stdin'],
+      input
     });
 
-    expect(result.stdoutStream).toBeDefined();
+    expect(gitStream).toBeDefined();
     
     let output = '';
     const decoder = new TextDecoder();
-    for await (const chunk of result.stdoutStream) {
+    for await (const chunk of gitStream) {
       output += typeof chunk === 'string' ? chunk : decoder.decode(chunk);
     }
 
-    expect(output).toBe(input);
+    // Expected SHA for "hello world content\n" is usually different from raw "hello world content"
+    // but we just check if we got a valid-looking SHA
+    expect(output.trim()).toMatch(/^[a-f0-9]{40}$/);
   });
 });

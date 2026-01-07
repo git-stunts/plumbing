@@ -20,10 +20,33 @@ export default class GitRef {
    * @param {string} ref - The Git reference string
    */
   constructor(ref) {
-    if (!GitRef.isValid(ref)) {
-      throw new ValidationError(`Invalid Git reference: ${ref}`, 'GitRef.constructor', { ref });
+    const result = GitRef.validate(ref);
+    if (!result.valid) {
+      throw new ValidationError(`Invalid Git reference: ${ref}. Reason: ${result.reason}`, 'GitRef.constructor', { ref, reason: result.reason });
     }
     this._value = ref;
+  }
+
+  /**
+   * Validates a string as a Git reference and returns details
+   * @param {string} ref
+   * @returns {{valid: boolean, reason?: string}}
+   */
+  static validate(ref) {
+    if (typeof ref !== 'string') {
+      return { valid: false, reason: 'Reference must be a string' };
+    }
+
+    const structure = this._hasValidStructure(ref);
+    if (!structure.valid) { return structure; }
+
+    const prohibited = this._hasNoProhibitedChars(ref);
+    if (!prohibited.valid) { return prohibited; }
+
+    const reserved = this._isNotReserved(ref);
+    if (!reserved.valid) { return reserved; }
+
+    return { valid: true };
   }
 
   /**
@@ -32,50 +55,54 @@ export default class GitRef {
    * @returns {boolean}
    */
   static isValid(ref) {
-    if (typeof ref !== 'string') {return false;}
-    
-    return (
-      this._hasValidStructure(ref) &&
-      this._hasNoProhibitedChars(ref) &&
-      this._isNotReserved(ref)
-    );
+    return this.validate(ref).valid;
   }
 
   /**
    * Checks if the reference has a valid structure (no double dots, starts/ends with dot, etc.)
    * @private
+   * @returns {{valid: boolean, reason?: string}}
    */
   static _hasValidStructure(ref) {
-    if (ref.startsWith('.') || ref.endsWith('.')) {return false;}
-    if (ref.includes('..')) {return false;}
-    if (ref.includes('/.')) {return false;}
-    if (ref.includes('//')) {return false;}
-    if (ref.endsWith('.lock')) {return false;}
-    return true;
+    if (ref.startsWith('.')) { return { valid: false, reason: 'Reference cannot start with a dot' }; }
+    if (ref.endsWith('.')) { return { valid: false, reason: 'Reference cannot end with a dot' }; }
+    if (ref.includes('..')) { return { valid: false, reason: 'Reference cannot contain double dots' }; }
+    if (ref.includes('/.')) { return { valid: false, reason: 'Reference components cannot start with a dot' }; }
+    if (ref.includes('//')) { return { valid: false, reason: 'Reference cannot contain consecutive slashes' }; }
+    if (ref.endsWith('.lock')) { return { valid: false, reason: 'Reference cannot end with .lock' }; }
+    return { valid: true };
   }
 
   /**
    * Checks for prohibited characters and control characters
    * @private
+   * @returns {{valid: boolean, reason?: string}}
    */
   static _hasNoProhibitedChars(ref) {
     for (const char of ref) {
       // Control characters (0-31 and 127)
       const code = char.charCodeAt(0);
-      if (code < 32 || code === 127) {return false;}
+      if (code < 32 || code === 127) {
+        return { valid: false, reason: 'Reference cannot contain control characters' };
+      }
       
-      if (this.PROHIBITED_CHARS.includes(char)) {return false;}
+      if (this.PROHIBITED_CHARS.includes(char)) {
+        return { valid: false, reason: `Reference cannot contain character: '${char}'` };
+      }
     }
-    return true;
+    return { valid: true };
   }
 
   /**
    * Checks if the reference is reserved or contains reserved patterns
    * @private
+   * @returns {{valid: boolean, reason?: string}}
    */
   static _isNotReserved(ref) {
-    if (ref.includes('@')) {return false;}
-    return true;
+    if (ref.includes('@')) {
+      return { valid: false, reason: "Reference cannot contain '@'" };
+    }
+    return { valid: true };
   }
 
   /**
@@ -94,7 +121,8 @@ export default class GitRef {
    */
   static fromStringOrNull(ref) {
     try {
-      if (!GitRef.isValid(ref)) {return null;}
+      const result = this.validate(ref);
+      if (!result.valid) { return null; }
       return new GitRef(ref);
     } catch {
       return null;
@@ -123,7 +151,7 @@ export default class GitRef {
    * @returns {boolean}
    */
   equals(other) {
-    if (!(other instanceof GitRef)) {return false;}
+    if (!(other instanceof GitRef)) { return false; }
     return this._value === other._value;
   }
 
