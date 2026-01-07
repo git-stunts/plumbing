@@ -4,32 +4,42 @@
 
 import GitSha from '../value-objects/GitSha.js';
 import GitFileMode from '../value-objects/GitFileMode.js';
-import InvalidArgumentError from '../errors/InvalidArgumentError.js';
+import ValidationError from '../errors/ValidationError.js';
+import { GitTreeEntrySchema } from '../schemas/GitTreeEntrySchema.js';
 
 /**
  * Represents an entry in a Git tree
  */
 export default class GitTreeEntry {
   /**
-   * @param {GitFileMode} mode - File mode
-   * @param {GitSha} sha - Object SHA
+   * @param {GitFileMode|string} mode - File mode
+   * @param {GitSha|string} sha - Object SHA
    * @param {string} path - File path
    */
   constructor(mode, sha, path) {
-    if (!(mode instanceof GitFileMode)) {
-      throw new InvalidArgumentError('Mode must be a GitFileMode instance', 'GitTreeEntry.constructor', { mode });
+    const data = {
+      mode: mode instanceof GitFileMode ? mode.toString() : mode,
+      sha: sha instanceof GitSha ? sha.toString() : sha,
+      path
+    };
+
+    const result = GitTreeEntrySchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid tree entry: ${result.error.errors[0].message}`,
+        'GitTreeEntry.constructor',
+        { data, errors: result.error.errors }
+      );
     }
-    if (!(sha instanceof GitSha)) {
-      throw new InvalidArgumentError('SHA must be a GitSha instance', 'GitTreeEntry.constructor', { sha });
-    }
-    this.mode = mode;
-    this.sha = sha;
-    this.path = path;
+
+    this.mode = mode instanceof GitFileMode ? mode : new GitFileMode(result.data.mode);
+    this.sha = sha instanceof GitSha ? sha : new GitSha(result.data.sha);
+    this.path = result.data.path;
   }
 
   /**
    * Returns the object type
-   * @returns {GitObjectType}
+   * @returns {import('../value-objects/GitObjectType.js').default}
    */
   type() {
     return this.mode.getObjectType();
@@ -49,5 +59,17 @@ export default class GitTreeEntry {
    */
   isBlob() {
     return this.type().isBlob();
+  }
+
+  /**
+   * Returns a JSON representation of the entry
+   * @returns {Object}
+   */
+  toJSON() {
+    return {
+      mode: this.mode.toString(),
+      sha: this.sha.toString(),
+      path: this.path
+    };
   }
 }

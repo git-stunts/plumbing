@@ -1,48 +1,48 @@
-
+import { describe, it, expect } from 'vitest';
 import GitCommit from '../../../src/domain/entities/GitCommit.js';
-import GitTree from '../../../src/domain/entities/GitTree.js';
 import GitSha from '../../../src/domain/value-objects/GitSha.js';
 import GitSignature from '../../../src/domain/value-objects/GitSignature.js';
-import InvalidArgumentError from '../../../src/domain/errors/InvalidArgumentError.js';
+import ValidationError from '../../../src/domain/errors/ValidationError.js';
 
 describe('GitCommit', () => {
-  const tree = GitTree.empty();
-  const signature = new GitSignature({ name: 'James', email: 'james@example.com', timestamp: 1234567890 });
-  const author = signature;
-  const committer = signature;
+  const treeSha = GitSha.EMPTY_TREE;
+  const author = new GitSignature({ name: 'Author', email: 'author@example.com', timestamp: 1234567890 });
+  const committer = new GitSignature({ name: 'Committer', email: 'committer@example.com', timestamp: 1234567890 });
   const message = 'Initial commit';
 
   describe('constructor', () => {
     it('creates a root commit', () => {
-      const commit = new GitCommit({ sha: null, tree, parents: [], author, committer, message });
-      expect(commit.isRoot()).toBe(true);
-      expect(commit.isMerge()).toBe(false);
+      const commit = new GitCommit({ sha: null, treeSha, parents: [], author, committer, message });
+      expect(commit.sha).toBeNull();
+      expect(commit.treeSha.equals(treeSha)).toBe(true);
       expect(commit.parents).toHaveLength(0);
+      expect(commit.isRoot()).toBe(true);
     });
 
     it('creates a commit with parents', () => {
-      const parent = GitSha.fromString('a1b2c3d4e5f67890123456789012345678901234');
-      const commit = new GitCommit({ sha: null, tree, parents: [parent], author, committer, message });
-      expect(commit.isRoot()).toBe(false);
+      const parent = new GitSha('1234567890abcdef1234567890abcdef12345678');
+      const commit = new GitCommit({ sha: null, treeSha, parents: [parent], author, committer, message });
       expect(commit.parents).toHaveLength(1);
+      expect(commit.parents[0].equals(parent)).toBe(true);
+      expect(commit.isRoot()).toBe(false);
+      expect(commit.isMerge()).toBe(false);
     });
 
     it('creates a merge commit', () => {
-      const p1 = GitSha.fromString('a1b2c3d4e5f67890123456789012345678901234');
-      const p2 = GitSha.fromString('f1e2d3c4b5a697887766554433221100ffeeddcc');
-      const commit = new GitCommit({ sha: null, tree, parents: [p1, p2], author, committer, message });
+      const p1 = new GitSha('1234567890abcdef1234567890abcdef12345678');
+      const p2 = new GitSha('abcdef1234567890abcdef1234567890abcdef12');
+      const commit = new GitCommit({ sha: null, treeSha, parents: [p1, p2], author, committer, message });
       expect(commit.isMerge()).toBe(true);
-      expect(commit.parents).toHaveLength(2);
     });
 
     it('throws for invalid tree', () => {
-      expect(() => new GitCommit({ sha: null, tree: {}, parents: [], author, committer, message })).toThrow(InvalidArgumentError);
+      expect(() => new GitCommit({ sha: null, treeSha: 'invalid', parents: [], author, committer, message })).toThrow(ValidationError);
     });
   });
 
   describe('type', () => {
     it('returns commit type', () => {
-      const commit = new GitCommit({ sha: null, tree, parents: [], author, committer, message });
+      const commit = new GitCommit({ sha: null, treeSha, parents: [], author, committer, message });
       expect(commit.type().isCommit()).toBe(true);
     });
   });

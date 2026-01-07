@@ -3,6 +3,7 @@
  */
 
 import ValidationError from '../errors/ValidationError.js';
+import { GitShaSchema } from '../schemas/GitShaSchema.js';
 
 /**
  * GitSha represents a Git SHA-1 hash with validation.
@@ -17,10 +18,11 @@ export default class GitSha {
    * @param {string} sha - The SHA-1 hash string
    */
   constructor(sha) {
-    if (!GitSha.isValid(sha)) {
+    const result = GitShaSchema.safeParse(sha);
+    if (!result.success) {
       throw new ValidationError(`Invalid SHA-1 hash: ${sha}`, 'GitSha.constructor', { sha });
     }
-    this._value = sha.toLowerCase();
+    this._value = result.data;
   }
 
   /**
@@ -29,10 +31,7 @@ export default class GitSha {
    * @returns {boolean}
    */
   static isValid(sha) {
-    if (typeof sha !== 'string') {return false;}
-    if (sha.length !== GitSha.LENGTH) {return false;}
-    const regex = new RegExp(`^[a-f0-9]{${GitSha.LENGTH}}$`);
-    return regex.test(sha.toLowerCase());
+    return GitShaSchema.safeParse(sha).success;
   }
 
   /**

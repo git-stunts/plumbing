@@ -3,7 +3,7 @@ import GitTree from '../../../src/domain/entities/GitTree.js';
 import GitTreeEntry from '../../../src/domain/entities/GitTreeEntry.js';
 import GitSha from '../../../src/domain/value-objects/GitSha.js';
 import GitFileMode from '../../../src/domain/value-objects/GitFileMode.js';
-import InvalidArgumentError from '../../../src/domain/errors/InvalidArgumentError.js';
+import ValidationError from '../../../src/domain/errors/ValidationError.js';
 
 describe('GitTree', () => {
   const sha = GitSha.EMPTY_TREE;
@@ -18,7 +18,7 @@ describe('GitTree', () => {
     });
 
     it('throws for invalid SHA', () => {
-      expect(() => new GitTree(123, [])).toThrow(InvalidArgumentError);
+      expect(() => new GitTree(123, [])).toThrow(ValidationError);
     });
   });
 
@@ -42,7 +42,7 @@ describe('GitTree', () => {
 
     it('throws when adding non-entry', () => {
       const tree = new GitTree(null, []);
-      expect(() => tree.addEntry({})).toThrow(InvalidArgumentError);
+      expect(() => tree.addEntry({})).toThrow(ValidationError);
     });
   });
 

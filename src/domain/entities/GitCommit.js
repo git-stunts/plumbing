@@ -3,10 +3,10 @@
  */
 
 import GitSha from '../value-objects/GitSha.js';
-import GitTree from './GitTree.js';
 import GitSignature from '../value-objects/GitSignature.js';
 import GitObjectType from '../value-objects/GitObjectType.js';
-import InvalidArgumentError from '../errors/InvalidArgumentError.js';
+import ValidationError from '../errors/ValidationError.js';
+import { GitCommitSchema } from '../schemas/GitCommitSchema.js';
 
 /**
  * Represents a Git commit object
@@ -14,32 +14,38 @@ import InvalidArgumentError from '../errors/InvalidArgumentError.js';
 export default class GitCommit {
   /**
    * @param {Object} options
-   * @param {GitSha|null} options.sha
-   * @param {GitTree} options.tree
-   * @param {GitSha[]} options.parents
-   * @param {GitSignature} options.author
-   * @param {GitSignature} options.committer
+   * @param {GitSha|string|null} options.sha
+   * @param {GitSha|string} options.treeSha
+   * @param {GitSha[]|string[]} options.parents
+   * @param {GitSignature|Object} options.author
+   * @param {GitSignature|Object} options.committer
    * @param {string} options.message
    */
-  constructor({ sha, tree, parents, author, committer, message }) {
-    if (sha && !(sha instanceof GitSha)) {
-      throw new InvalidArgumentError('SHA must be a GitSha instance or null', 'GitCommit.constructor', { sha });
+  constructor({ sha, treeSha, parents, author, committer, message }) {
+    const data = {
+      sha: sha instanceof GitSha ? sha.toString() : sha,
+      treeSha: treeSha instanceof GitSha ? treeSha.toString() : treeSha,
+      parents: parents.map(p => (p instanceof GitSha ? p.toString() : p)),
+      author: author instanceof GitSignature ? author.toJSON() : author,
+      committer: committer instanceof GitSignature ? committer.toJSON() : committer,
+      message
+    };
+
+    const result = GitCommitSchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid commit: ${result.error.errors[0].message}`,
+        'GitCommit.constructor',
+        { data, errors: result.error.errors }
+      );
     }
-    if (!(tree instanceof GitTree)) {
-      throw new InvalidArgumentError('Tree must be a GitTree instance', 'GitCommit.constructor', { tree });
-    }
-    if (!(author instanceof GitSignature)) {
-      throw new InvalidArgumentError('Author must be a GitSignature instance', 'GitCommit.constructor', { author });
-    }
-    if (!(committer instanceof GitSignature)) {
-      throw new InvalidArgumentError('Committer must be a GitSignature instance', 'GitCommit.constructor', { committer });
-    }
-    this.sha = sha;
-    this.tree = tree;
-    this.parents = [...parents];
-    this.author = author;
-    this.committer = committer;
-    this.message = message;
+
+    this.sha = sha instanceof GitSha ? sha : (result.data.sha ? new GitSha(result.data.sha) : null);
+    this.treeSha = new GitSha(result.data.treeSha);
+    this.parents = result.data.parents.map(p => new GitSha(p));
+    this.author = author instanceof GitSignature ? author : new GitSignature(result.data.author);
+    this.committer = committer instanceof GitSignature ? committer : new GitSignature(result.data.committer);
+    this.message = result.data.message;
   }
 
   /**
@@ -72,5 +78,20 @@ export default class GitCommit {
    */
   isMerge() {
     return this.parents.length > 1;
+  }
+
+  /**
+   * Returns a JSON representation of the commit
+   * @returns {Object}
+   */
+  toJSON() {
+    return {
+      sha: this.sha ? this.sha.toString() : null,
+      treeSha: this.treeSha.toString(),
+      parents: this.parents.map(p => p.toString()),
+      author: this.author.toJSON(),
+      committer: this.committer.toJSON(),
+      message: this.message
+    };
   }
 }

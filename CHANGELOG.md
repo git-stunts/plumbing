@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-07
+
+### Added
+- **Unified Streaming Architecture**: Refactored all shell runners (Node, Bun, Deno) to use a single "Streaming Only" pattern, simplifying the adapter layer and port interface.
+- **Exhaustive Zod Schemas**: Centralized validation in `src/domain/schemas` using Zod for all Entities and Value Objects.
+- **Safety Buffering**: Added `GitStream.collect({ maxBytes })` with default 10MB limit to prevent OOM during large command execution.
+- **Runtime Factory**: Added `GitPlumbing.createDefault()` for zero-config instantiation in Node, Bun, and Deno.
+
+### Changed
+- **Strict Hexagonal Architecture**: Enforced strict dependency inversion by passing the runner port to domain services.
+- **1 Class per File**: Reorganized the codebase to strictly adhere to the "one class per file" mandate.
+- **Magic Number Elimination**: Replaced all hardcoded literals (timeouts, buffer sizes, SHA constants) with named exports in the ports layer.
+- **Bound Context**: Ensured `ShellRunnerFactory` returns bound methods to prevent `this` context loss in production.
+
+### Fixed
+- **Performance**: Optimized `GitStream` for Node.js by using native `Symbol.asyncIterator` instead of high-frequency listener attachments.
+- **Validation**: Fixed incomplete Git reference validation by implementing the full `git-check-ref-format` specification via Zod.
+
 ## [1.1.0] - 2026-01-07
 
 ### Added

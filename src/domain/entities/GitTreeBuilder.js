@@ -6,7 +6,7 @@ import GitTree from './GitTree.js';
 import GitTreeEntry from './GitTreeEntry.js';
 import GitFileMode from '../value-objects/GitFileMode.js';
 import GitSha from '../value-objects/GitSha.js';
-import InvalidArgumentError from '../errors/InvalidArgumentError.js';
+import ValidationError from '../errors/ValidationError.js';
 
 /**
  * Fluent builder for creating GitTree instances efficiently
@@ -23,7 +23,7 @@ export default class GitTreeBuilder {
    */
   addEntry(entry) {
     if (!(entry instanceof GitTreeEntry)) {
-      throw new InvalidArgumentError('Entry must be a GitTreeEntry instance', 'GitTreeBuilder.addEntry', { entry });
+      throw new ValidationError('Entry must be a GitTreeEntry instance', 'GitTreeBuilder.addEntry', { entry });
     }
     this._entries.push(entry);
     return this;
@@ -38,10 +38,7 @@ export default class GitTreeBuilder {
    * @returns {GitTreeBuilder}
    */
   add({ path, sha, mode }) {
-    const gitSha = sha instanceof GitSha ? sha : new GitSha(sha);
-    const gitMode = mode instanceof GitFileMode ? mode : new GitFileMode(mode);
-    
-    return this.addEntry(new GitTreeEntry(gitMode, gitSha, path));
+    return this.addEntry(new GitTreeEntry(mode, sha, path));
   }
 
   /**

@@ -1,6 +1,6 @@
 import GitBlob from '../src/domain/entities/GitBlob.js';
 import GitSha from '../src/domain/value-objects/GitSha.js';
-import InvalidArgumentError from '../src/domain/errors/InvalidArgumentError.js';
+import ValidationError from '../src/domain/errors/ValidationError.js';
 
 const BLOB_CONTENT = 'Hello, world!';
 const EMPTY_CONTENT = '';
@@ -22,8 +22,7 @@ describe('GitBlob', () => {
     });
 
     it('throws error when SHA is not a GitSha instance', () => {
-      expect(() => new GitBlob('invalid-sha', BLOB_CONTENT)).toThrow(InvalidArgumentError);
-      expect(() => new GitBlob('invalid-sha', BLOB_CONTENT)).toThrow('SHA must be a GitSha instance or null');
+      expect(() => new GitBlob('invalid-sha', BLOB_CONTENT)).toThrow(ValidationError);
     });
 
     it('accepts binary content', () => {

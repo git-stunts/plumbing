@@ -3,6 +3,7 @@
  */
 
 import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactory.js';
+import { DEFAULT_COMMAND_TIMEOUT } from './src/ports/RunnerOptionsSchema.js';
 
 /**
  * ShellRunner provides a standard CommandRunner implementation.
@@ -20,6 +21,9 @@ export default class ShellRunner {
    */
   static async run(options) {
     const runner = ShellRunnerFactory.create();
-    return runner.run(options);
+    return runner({
+      timeout: DEFAULT_COMMAND_TIMEOUT,
+      ...options
+    });
   }
 }

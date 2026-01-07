@@ -1,26 +1,31 @@
+/**
+ * @fileoverview GitPlumbing - The primary domain service for Git plumbing operations
+ */
+
 import path from 'node:path';
 import fs from 'node:fs';
-import { RunnerOptionsSchema, RunnerResultSchema } from './src/ports/CommandRunnerPort.js';
+import { RunnerOptionsSchema, DEFAULT_MAX_BUFFER_SIZE } from './src/ports/RunnerOptionsSchema.js';
 import GitSha from './src/domain/value-objects/GitSha.js';
 import GitPlumbingError from './src/domain/errors/GitPlumbingError.js';
 import InvalidArgumentError from './src/domain/errors/InvalidArgumentError.js';
 import CommandSanitizer from './src/domain/services/CommandSanitizer.js';
 import GitCommandBuilder from './src/domain/services/GitCommandBuilder.js';
 import GitStream from './src/infrastructure/GitStream.js';
+import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactory.js';
 
 /**
  * GitPlumbing provides a low-level, robust interface for executing Git plumbing commands.
- * It follows Dependency Inversion by accepting a 'runner' for the actual execution.
+ * Adheres to Hexagonal Architecture by defining its dependencies via ports (CommandRunner).
  */
 export default class GitPlumbing {
   /**
    * @param {Object} options
-   * @param {import('./src/ports/CommandRunnerPort.js').CommandRunner} options.runner - The async function that executes shell commands.
+   * @param {import('./src/ports/CommandRunnerPort.js').CommandRunner} options.runner - The functional port for shell execution.
    * @param {string} [options.cwd=process.cwd()] - The working directory for git operations.
    */
   constructor({ runner, cwd = process.cwd() }) {
     if (typeof runner !== 'function') {
-      throw new InvalidArgumentError('A functional runner is required for GitPlumbing', 'GitPlumbing.constructor');
+      throw new InvalidArgumentError('A functional runner port is required for GitPlumbing', 'GitPlumbing.constructor');
     }
     
     // Validate CWD
@@ -29,8 +34,23 @@ export default class GitPlumbing {
       throw new InvalidArgumentError(`Invalid working directory: ${cwd}`, 'GitPlumbing.constructor', { cwd });
     }
 
+    /** @private */
     this.runner = runner;
+    /** @private */
     this.cwd = resolvedCwd;
+  }
+
+  /**
+   * Factory method to create an instance with the default shell runner for the current environment.
+   * @param {Object} [options]
+   * @param {string} [options.cwd]
+   * @returns {GitPlumbing}
+   */
+  static createDefault(options = {}) {
+    return new GitPlumbing({
+      runner: ShellRunnerFactory.create(),
+      ...options
+    });
   }
 
   /**
@@ -49,37 +69,30 @@ export default class GitPlumbing {
   }
 
   /**
-   * Executes a git command asynchronously.
+   * Executes a git command asynchronously and buffers the result.
    * @param {Object} options
    * @param {string[]} options.args - Array of git arguments.
    * @param {string|Uint8Array} [options.input] - Optional stdin input.
+   * @param {number} [options.maxBytes=DEFAULT_MAX_BUFFER_SIZE] - Maximum buffer size.
    * @returns {Promise<string>} - The trimmed stdout.
-   * @throws {GitPlumbingError} - If the command fails.
+   * @throws {GitPlumbingError} - If the command fails or buffer is exceeded.
    */
-  async execute({ args, input }) {
-    CommandSanitizer.sanitize(args);
-
-    const options = RunnerOptionsSchema.parse({
-      command: 'git',
-      args,
-      cwd: this.cwd,
-      input,
-    });
-
+  async execute({ args, input, maxBytes = DEFAULT_MAX_BUFFER_SIZE }) {
     try {
-      const rawResult = await this.runner(options);
-      const result = RunnerResultSchema.parse(rawResult);
+      const stream = await this.executeStream({ args, input });
+      const stdout = await stream.collect({ maxBytes });
+      const { code, stderr } = await stream.finished;
 
-      if (result.code !== 0 && result.code !== undefined) {
-        throw new GitPlumbingError(`Git command failed with code ${result.code}`, 'GitPlumbing.execute', {
+      if (code !== 0) {
+        throw new GitPlumbingError(`Git command failed with code ${code}`, 'GitPlumbing.execute', {
           args,
-          stderr: result.stderr,
-          stdout: result.stdout,
-          code: result.code
+          stderr,
+          stdout,
+          code
         });
       }
 
-      return result.stdout.trim();
+      return stdout.trim();
     } catch (err) {
       if (err instanceof GitPlumbingError) {throw err;}
       throw new GitPlumbingError(err.message, 'GitPlumbing.execute', { args, originalError: err });
@@ -91,7 +104,7 @@ export default class GitPlumbing {
    * @param {Object} options
    * @param {string[]} options.args - Array of git arguments.
    * @param {string|Uint8Array} [options.input] - Optional stdin input.
-   * @returns {Promise<GitStream>} - The unified stdout stream.
+   * @returns {Promise<GitStream>} - The unified stdout stream wrapper.
    * @throws {GitPlumbingError} - If command setup fails.
    */
   async executeStream({ args, input }) {
@@ -102,17 +115,10 @@ export default class GitPlumbing {
       args,
       cwd: this.cwd,
       input,
-      stream: true
     });
 
     try {
-      const rawResult = await this.runner(options);
-      const result = RunnerResultSchema.parse(rawResult);
-
-      if (!result.stdoutStream) {
-        throw new GitPlumbingError('Failed to initialize command stream', 'GitPlumbing.executeStream', { args });
-      }
-
+      const result = await this.runner(options);
       return new GitStream(result.stdoutStream, result.exitPromise);
     } catch (err) {
       if (err instanceof GitPlumbingError) {throw err;}
@@ -121,27 +127,21 @@ export default class GitPlumbing {
   }
 
   /**
-   * Specifically handles commands that might exit with 1 (like diff).
+   * Executes a git command and returns both stdout and exit status without throwing on non-zero exit.
    * @param {Object} options
-   * @param {string[]} options.args
+   * @param {string[]} options.args - Array of git arguments.
+   * @param {number} [options.maxBytes] - Maximum buffer size.
    * @returns {Promise<{stdout: string, status: number}>}
    */
-  async executeWithStatus({ args }) {
-    CommandSanitizer.sanitize(args);
-
-    const options = RunnerOptionsSchema.parse({
-      command: 'git',
-      args,
-      cwd: this.cwd,
-    });
-
+  async executeWithStatus({ args, maxBytes }) {
     try {
-      const rawResult = await this.runner(options);
-      const result = RunnerResultSchema.parse(rawResult);
+      const stream = await this.executeStream({ args });
+      const stdout = await stream.collect({ maxBytes });
+      const { code } = await stream.finished;
 
       return {
-        stdout: result.stdout.trim(),
-        status: result.code || 0,
+        stdout: stdout.trim(),
+        status: code || 0,
       };
     } catch (err) {
       throw new GitPlumbingError(err.message, 'GitPlumbing.executeWithStatus', { args, originalError: err });
@@ -153,7 +153,7 @@ export default class GitPlumbing {
    * @returns {string}
    */
   get emptyTree() {
-    return '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+    return GitSha.EMPTY_TREE_VALUE;
   }
 
   /**

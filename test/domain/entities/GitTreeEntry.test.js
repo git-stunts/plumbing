@@ -2,7 +2,7 @@
 import GitTreeEntry from '../../../src/domain/entities/GitTreeEntry.js';
 import GitSha from '../../../src/domain/value-objects/GitSha.js';
 import GitFileMode from '../../../src/domain/value-objects/GitFileMode.js';
-import InvalidArgumentError from '../../../src/domain/errors/InvalidArgumentError.js';
+import ValidationError from '../../../src/domain/errors/ValidationError.js';
 
 describe('GitTreeEntry', () => {
   const sha = GitSha.EMPTY_TREE;
@@ -17,12 +17,8 @@ describe('GitTreeEntry', () => {
     expect(entry.path).toBe('file.txt');
   });
 
-  it('throws for invalid mode type', () => {
-    expect(() => new GitTreeEntry('100644', sha, 'file.txt')).toThrow(InvalidArgumentError);
-  });
-
   it('throws for invalid SHA', () => {
-    expect(() => new GitTreeEntry(regularMode, 'not-a-sha', 'file.txt')).toThrow(InvalidArgumentError);
+    expect(() => new GitTreeEntry(regularMode, 'not-a-sha', 'file.txt')).toThrow(ValidationError);
   });
 
   it('identifies tree correctly', () => {

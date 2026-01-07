@@ -1,51 +1,20 @@
 /**
- * @fileoverview Node.js implementation of the shell command runner
+ * @fileoverview Node.js implementation of the shell command runner (Streaming Only)
  */
 
-import { execFile, spawn } from 'node:child_process';
-import { RunnerResultSchema } from '../../../ports/CommandRunnerPort.js';
+import { spawn } from 'node:child_process';
+import { RunnerResultSchema } from '../../../ports/RunnerResultSchema.js';
+import { DEFAULT_MAX_STDERR_SIZE } from '../../../ports/RunnerOptionsSchema.js';
 
 /**
- * Executes shell commands using Node.js child_process.execFile or spawn
+ * Executes shell commands using Node.js spawn and always returns a stream.
  */
 export default class NodeShellRunner {
-  static MAX_BUFFER = 100 * 1024 * 1024; // 100MB
-
   /**
    * Executes a command
    * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
    */
-  async run({ command, args, cwd, input, timeout, stream }) {
-    if (stream) {
-      return this._runStream({ command, args, cwd, input, timeout });
-    }
-
-    return new Promise((resolve) => {
-      const child = execFile(command, args, { 
-        cwd, 
-        encoding: 'utf8', 
-        maxBuffer: NodeShellRunner.MAX_BUFFER,
-        timeout
-      }, (error, stdout, stderr) => {
-        resolve(RunnerResultSchema.parse({
-          stdout: stdout || '',
-          stderr: stderr || '',
-          code: error && typeof error.code === 'number' ? error.code : (error ? 1 : 0)
-        }));
-      });
-
-      if (input && child.stdin) {
-        child.stdin.write(input);
-        child.stdin.end();
-      }
-    });
-  }
-
-  /**
-   * Executes a command and returns a stream
-   * @private
-   */
-  async _runStream({ command, args, cwd, input, timeout }) {
+  async run({ command, args, cwd, input, timeout }) {
     const child = spawn(command, args, { cwd });
 
     if (child.stdin) {
@@ -58,30 +27,31 @@ export default class NodeShellRunner {
 
     let stderr = '';
     child.stderr?.on('data', (chunk) => {
-      stderr += chunk.toString();
+      // Small buffer for stderr to provide context on failure
+      if (stderr.length < DEFAULT_MAX_STDERR_SIZE) {
+        stderr += chunk.toString();
+      }
     });
 
     const exitPromise = new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
         child.kill();
-        resolve({ code: 1, stderr: 'Command timed out' });
+        resolve({ code: 1, stderr: `${stderr}\n[Command timed out after ${timeout}ms]` });
       }, timeout);
 
       child.on('exit', (code) => {
         clearTimeout(timeoutId);
-        // console.log(`Process exited with code ${code}, stderr: ${stderr}`);
         resolve({ code: code ?? 1, stderr });
       });
 
       child.on('error', (err) => {
         clearTimeout(timeoutId);
-        resolve({ code: 1, stderr: err.message });
+        resolve({ code: 1, stderr: `${stderr}\n${err.message}` });
       });
     });
 
     return RunnerResultSchema.parse({
       stdoutStream: child.stdout,
-      code: 0,
       exitPromise
     });
   }

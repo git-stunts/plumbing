@@ -16,7 +16,7 @@ export default class ShellRunnerFactory {
 
   /**
    * Creates a shell runner for the current environment
-   * @returns {{run: import('../../ports/CommandRunnerPort.js').CommandRunner}} A shell runner instance with a .run() method
+   * @returns {import('../../ports/CommandRunnerPort.js').CommandRunner} A functional shell runner
    */
   static create() {
     const env = this._detectEnvironment();
@@ -28,7 +28,8 @@ export default class ShellRunnerFactory {
     };
 
     const RunnerClass = runners[env];
-    return new RunnerClass();
+    const runner = new RunnerClass();
+    return runner.run.bind(runner);
   }
 
   /**

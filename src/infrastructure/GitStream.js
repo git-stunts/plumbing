@@ -2,6 +2,8 @@
  * @fileoverview Universal wrapper for Node.js and Web Streams
  */
 
+import { DEFAULT_MAX_BUFFER_SIZE } from '../ports/RunnerOptionsSchema.js';
+
 /**
  * GitStream provides a unified interface for consuming command output
  * across Node.js, Bun, and Deno runtimes.
@@ -17,7 +19,8 @@ export default class GitStream {
   }
 
   /**
-   * Returns a reader compatible with the Web Streams API
+   * Returns a reader compatible with the Web Streams API.
+   * Favor native async iteration for Node.js streams to avoid manual listener management.
    * @returns {{read: function(): Promise<{done: boolean, value: any}>, releaseLock: function(): void}}
    */
   getReader() {
@@ -25,52 +28,50 @@ export default class GitStream {
       return this._stream.getReader();
     }
 
-    // Polyfill reader for Node.js Readable streams
-    const stream = this._stream;
-    let ended = false;
+    // Node.js stream adapter using async iterator
+    const it = this._stream[Symbol.asyncIterator]();
 
     return {
       read: async () => {
-        if (ended) {
-          return { done: true, value: undefined };
-        }
-
-        return new Promise((resolve, reject) => {
-          const onData = (chunk) => {
-            cleanup();
-            resolve({ done: false, value: chunk });
-          };
-          const onEnd = () => {
-            ended = true;
-            cleanup();
-            resolve({ done: true, value: undefined });
-          };
-          const onError = (err) => {
-            cleanup();
-            reject(err);
-          };
-
-          const cleanup = () => {
-            stream.removeListener('data', onData);
-            stream.removeListener('end', onEnd);
-            stream.removeListener('error', onError);
-          };
-
-          stream.on('data', onData);
-          stream.on('end', onEnd);
-          stream.on('error', onError);
-
-          // Try to read immediately if data is buffered
-          const chunk = stream.read();
-          if (chunk !== null) {
-            onData(chunk);
+        try {
+          const { done, value } = await it.next();
+          return { done, value };
+        } catch (err) {
+          // If the stream was destroyed/ended unexpectedly
+          if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+            return { done: true, value: undefined };
           }
-        });
+          throw err;
+        }
       },
-      releaseLock: () => {
-        // Node streams don't have locking semantics like Web Streams
-      }
+      releaseLock: () => {}
     };
+  }
+
+  /**
+   * Collects the entire stream into a string, with a safety limit on bytes.
+   * @param {Object} options
+   * @param {number} [options.maxBytes=DEFAULT_MAX_BUFFER_SIZE]
+   * @returns {Promise<string>}
+   * @throws {Error} If maxBytes is exceeded.
+   */
+  async collect({ maxBytes = DEFAULT_MAX_BUFFER_SIZE } = {}) {
+    const decoder = new TextDecoder();
+    let totalBytes = 0;
+    let result = '';
+
+    for await (const chunk of this) {
+      const bytes = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk;
+      
+      if (totalBytes + bytes.length > maxBytes) {
+        throw new Error(`Buffer limit exceeded: ${maxBytes} bytes`);
+      }
+
+      totalBytes += bytes.length;
+      result += typeof chunk === 'string' ? chunk : decoder.decode(chunk);
+    }
+
+    return result;
   }
 
   /**

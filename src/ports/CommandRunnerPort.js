@@ -1,33 +1,18 @@
-import { z } from 'zod';
-
 /**
- * Zod schema for the result returned by a CommandRunner.
+ * @fileoverview CommandRunner port definition
  */
-export const RunnerResultSchema = z.object({
-  stdout: z.string().optional(),
-  stderr: z.string().optional(),
-  code: z.number().optional().default(0),
-  stdoutStream: z.any().optional(), // ReadableStream or similar
-  exitPromise: z.instanceof(Promise).optional(), // Resolves to {code, stderr} when process ends
-});
+
+import { DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_BUFFER_SIZE, DEFAULT_MAX_STDERR_SIZE } from './RunnerOptionsSchema.js';
+
+export { DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_BUFFER_SIZE, DEFAULT_MAX_STDERR_SIZE };
 
 /**
- * Zod schema for CommandRunner options.
- */
-export const RunnerOptionsSchema = z.object({
-  command: z.string(),
-  args: z.array(z.string()),
-  cwd: z.string().optional(),
-  input: z.union([z.string(), z.instanceof(Uint8Array)]).optional(),
-  timeout: z.number().optional().default(120000), // Increased to 120s for Docker CI
-  stream: z.boolean().optional().default(false),
-});
-
-/**
- * @typedef {z.infer<typeof RunnerResultSchema>} RunnerResult
- * @typedef {z.infer<typeof RunnerOptionsSchema>} RunnerOptions
+ * @typedef {import('./RunnerOptionsSchema.js').RunnerOptions} RunnerOptions
+ * @typedef {import('./RunnerResultSchema.js').RunnerResult} RunnerResult
  */
 
 /**
- * @typedef {function(RunnerOptions): Promise<RunnerResult>} CommandRunner
+ * @callback CommandRunner
+ * @param {RunnerOptions} options
+ * @returns {Promise<RunnerResult>}
  */

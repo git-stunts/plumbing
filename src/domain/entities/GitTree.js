@@ -5,22 +5,38 @@
 import GitSha from '../value-objects/GitSha.js';
 import GitObjectType from '../value-objects/GitObjectType.js';
 import GitTreeEntry from './GitTreeEntry.js';
-import InvalidArgumentError from '../errors/InvalidArgumentError.js';
+import ValidationError from '../errors/ValidationError.js';
+import { GitTreeSchema } from '../schemas/GitTreeSchema.js';
 
 /**
  * Represents a Git tree object
  */
 export default class GitTree {
   /**
-   * @param {GitSha|null} sha
+   * @param {GitSha|string|null} sha
    * @param {GitTreeEntry[]} entries
    */
   constructor(sha, entries = []) {
-    if (sha && !(sha instanceof GitSha)) {
-      throw new InvalidArgumentError('SHA must be a GitSha instance or null', 'GitTree.constructor', { sha });
+    const data = {
+      sha: sha instanceof GitSha ? sha.toString() : sha,
+      entries: entries.map(e => (e instanceof GitTreeEntry ? e.toJSON() : e))
+    };
+
+    const result = GitTreeSchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid tree: ${result.error.errors[0].message}`,
+        'GitTree.constructor',
+        { data, errors: result.error.errors }
+      );
     }
-    this.sha = sha;
-    this._entries = [...entries];
+
+    this.sha = sha instanceof GitSha ? sha : (result.data.sha ? new GitSha(result.data.sha) : null);
+    this._entries = entries.map((e, i) => {
+      if (e instanceof GitTreeEntry) return e;
+      const d = result.data.entries[i];
+      return new GitTreeEntry(d.mode, d.sha, d.path);
+    });
   }
 
   /**
@@ -46,9 +62,9 @@ export default class GitTree {
    */
   addEntry(entry) {
     if (!(entry instanceof GitTreeEntry)) {
-      throw new InvalidArgumentError('Entry must be a GitTreeEntry instance', 'GitTree.addEntry', { entry });
+      throw new ValidationError('Entry must be a GitTreeEntry instance', 'GitTree.addEntry', { entry });
     }
-    return new GitTree(this.sha, [...this.entries, entry]);
+    return new GitTree(this.sha, [...this._entries, entry]);
   }
 
   /**
@@ -65,5 +81,16 @@ export default class GitTree {
    */
   type() {
     return GitObjectType.tree();
+  }
+
+  /**
+   * Returns a JSON representation of the tree
+   * @returns {Object}
+   */
+  toJSON() {
+    return {
+      sha: this.sha ? this.sha.toString() : null,
+      entries: this._entries.map(e => e.toJSON())
+    };
   }
 }

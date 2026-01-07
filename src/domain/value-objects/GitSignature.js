@@ -3,6 +3,7 @@
  */
 
 import ValidationError from '../errors/ValidationError.js';
+import { GitSignatureSchema } from '../schemas/GitSignatureSchema.js';
 
 /**
  * Represents a Git signature (author or committer)
@@ -14,20 +15,19 @@ export default class GitSignature {
    * @param {string} data.email - Email of the person
    * @param {number} [data.timestamp] - Unix timestamp (seconds)
    */
-  constructor({ name, email, timestamp = Math.floor(Date.now() / 1000) }) {
-    if (!name || typeof name !== 'string') {
-      throw new ValidationError('Name is required and must be a string', 'GitSignature.constructor', { name });
-    }
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      throw new ValidationError('Valid email is required', 'GitSignature.constructor', { email });
-    }
-    if (typeof timestamp !== 'number') {
-      throw new ValidationError('Timestamp must be a number', 'GitSignature.constructor', { timestamp });
+  constructor(data) {
+    const result = GitSignatureSchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid signature: ${result.error.errors[0].message}`,
+        'GitSignature.constructor',
+        { data, errors: result.error.errors }
+      );
     }
     
-    this.name = name;
-    this.email = email;
-    this.timestamp = timestamp;
+    this.name = result.data.name;
+    this.email = result.data.email;
+    this.timestamp = result.data.timestamp;
   }
 
   /**
@@ -36,5 +36,17 @@ export default class GitSignature {
    */
   toString() {
     return `${this.name} <${this.email}> ${this.timestamp}`;
+  }
+
+  /**
+   * Returns the JSON representation
+   * @returns {Object}
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      email: this.email,
+      timestamp: this.timestamp
+    };
   }
 }

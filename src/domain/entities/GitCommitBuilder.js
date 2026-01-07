@@ -4,9 +4,8 @@
 
 import GitCommit from './GitCommit.js';
 import GitSha from '../value-objects/GitSha.js';
-import GitTree from './GitTree.js';
 import GitSignature from '../value-objects/GitSignature.js';
-import InvalidArgumentError from '../errors/InvalidArgumentError.js';
+import ValidationError from '../errors/ValidationError.js';
 
 /**
  * Fluent builder for creating GitCommit instances
@@ -14,7 +13,7 @@ import InvalidArgumentError from '../errors/InvalidArgumentError.js';
 export default class GitCommitBuilder {
   constructor() {
     this._sha = null;
-    this._tree = null;
+    this._treeSha = null;
     this._parents = [];
     this._author = null;
     this._committer = null;
@@ -36,15 +35,16 @@ export default class GitCommitBuilder {
   }
 
   /**
-   * Sets the tree
-   * @param {GitTree} tree
+   * Sets the tree SHA
+   * @param {GitSha|string|{sha: GitSha|string}} tree
    * @returns {GitCommitBuilder}
    */
   tree(tree) {
-    if (!(tree instanceof GitTree)) {
-      throw new InvalidArgumentError('Tree must be a GitTree instance', 'GitCommitBuilder.tree', { tree });
+    if (tree && typeof tree === 'object' && 'sha' in tree) {
+      this._treeSha = tree.sha instanceof GitSha ? tree.sha : new GitSha(tree.sha);
+    } else {
+      this._treeSha = tree instanceof GitSha ? tree : new GitSha(tree);
     }
-    this._tree = tree;
     return this;
   }
 
@@ -66,7 +66,7 @@ export default class GitCommitBuilder {
    */
   parents(parents) {
     if (!Array.isArray(parents)) {
-      throw new InvalidArgumentError('Parents must be an array', 'GitCommitBuilder.parents');
+      throw new ValidationError('Parents must be an array', 'GitCommitBuilder.parents');
     }
     this._parents = parents.map(p => (p instanceof GitSha ? p : new GitSha(p)));
     return this;
@@ -74,27 +74,21 @@ export default class GitCommitBuilder {
 
   /**
    * Sets the author
-   * @param {GitSignature} author
+   * @param {GitSignature|Object} author
    * @returns {GitCommitBuilder}
    */
   author(author) {
-    if (!(author instanceof GitSignature)) {
-      throw new InvalidArgumentError('Author must be a GitSignature instance', 'GitCommitBuilder.author', { author });
-    }
-    this._author = author;
+    this._author = author instanceof GitSignature ? author : new GitSignature(author);
     return this;
   }
 
   /**
    * Sets the committer
-   * @param {GitSignature} committer
+   * @param {GitSignature|Object} committer
    * @returns {GitCommitBuilder}
    */
   committer(committer) {
-    if (!(committer instanceof GitSignature)) {
-      throw new InvalidArgumentError('Committer must be a GitSignature instance', 'GitCommitBuilder.committer', { committer });
-    }
-    this._committer = committer;
+    this._committer = committer instanceof GitSignature ? committer : new GitSignature(committer);
     return this;
   }
 
@@ -113,19 +107,9 @@ export default class GitCommitBuilder {
    * @returns {GitCommit}
    */
   build() {
-    if (!this._tree) {
-      throw new InvalidArgumentError('Tree is required to build a commit', 'GitCommitBuilder.build');
-    }
-    if (!this._author) {
-      throw new InvalidArgumentError('Author is required to build a commit', 'GitCommitBuilder.build');
-    }
-    if (!this._committer) {
-      throw new InvalidArgumentError('Committer is required to build a commit', 'GitCommitBuilder.build');
-    }
-
     return new GitCommit({
       sha: this._sha,
-      tree: this._tree,
+      treeSha: this._treeSha,
       parents: this._parents,
       author: this._author,
       committer: this._committer,
