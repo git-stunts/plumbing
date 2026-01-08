@@ -5,13 +5,18 @@ services:
       dockerfile: Dockerfile.node
     environment:
       - NODE_ENV=test
+      - GIT_STUNTS_DOCKER=1
 
   bun-test:
     build:
       context: .
       dockerfile: Dockerfile.bun
+    environment:
+      - GIT_STUNTS_DOCKER=1
 
   deno-test:
     build:
       context: .
       dockerfile: Dockerfile.deno
+    environment:
+      - GIT_STUNTS_DOCKER=1

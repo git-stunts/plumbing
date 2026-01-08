@@ -20,6 +20,26 @@ A low-level, robust, and environment-agnostic Git plumbing library for the moder
 - **OOM Protection**: Integrated safety buffering (`GitStream.collect`) with configurable byte limits.
 - **Dockerized CI**: Parallel test execution across all runtimes using isolated containers.
 
+## 🛡️ Safety First: Docker Execution
+
+This library performs low-level Git manipulations. To protect your host system and ensure a reproducible environment, **execution on the host is strictly prohibited.**
+
+All tests and commands should be run inside the provided Docker containers:
+
+```bash
+docker-compose run --rm node-test
+```
+
+The system will automatically fail if `GIT_STUNTS_DOCKER=1` is not set.
+
+We load `@git-stunts/docker-guard` (v0.1.0+) before every suite (`test/support/ensure-docker.js`), so invoking `ensureDocker()` happens automatically for Vitest/Bun/Deno. You can copy the same pattern in other packages:
+
+```javascript
+import { ensureDocker } from '@git-stunts/docker-guard';
+
+ensureDocker();
+```
+
 ## 🏗️ Design Principles
 
 1.  **Git as a Subsystem**: Git is treated as an external, untrusted dependency. Every command and environment variable is sanitized.

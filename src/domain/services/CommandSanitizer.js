@@ -42,7 +42,8 @@ export default class CommandSanitizer {
     'check-ignore',
     'check-attr',
     'init',
-    'config'
+    'config',
+    'log'
   ]);
 
   /**
