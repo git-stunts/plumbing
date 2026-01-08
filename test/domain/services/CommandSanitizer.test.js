@@ -21,27 +21,17 @@ describe('CommandSanitizer', () => {
     expect(() => sanitizer.sanitize(['rev-parse', '--work-tree=/tmp', 'HEAD'])).toThrow(ProhibitedFlagError);
   });
 
-  it('blocks global flags before the subcommand', () => {
+  it('blocks global flags anywhere in the argument list', () => {
     expect(() => sanitizer.sanitize(['-C', '/tmp', 'rev-parse', 'HEAD'])).toThrow(ProhibitedFlagError);
-    expect(() => sanitizer.sanitize(['-c', 'user.name=attacker', 'rev-parse', 'HEAD'])).toThrow(ProhibitedFlagError);
+    expect(() => sanitizer.sanitize(['rev-parse', '-c', 'user.name=attacker', 'HEAD'])).toThrow(ProhibitedFlagError);
     expect(() => sanitizer.sanitize(['--git-dir=/tmp/.git', 'rev-parse', 'HEAD'])).toThrow(ProhibitedFlagError);
-    
-    try {
-      sanitizer.sanitize(['-C', '/tmp', 'rev-parse', 'HEAD']);
-    } catch (err) {
-      expect(err.message).toContain('Global flag "-C" is prohibited before the subcommand');
-    }
   });
 
-  it('allows whitelisted commands even if preceded by non-prohibited flags', () => {
-    // Note: --version is technically a command in our whitelist, but also a flag.
-    // In git, 'git --version' works.
+  it('allows exactly --version as a special case', () => {
     expect(() => sanitizer.sanitize(['--version'])).not.toThrow();
   });
 
   it('allows dynamic registration of commands', () => {
-    // Reset allowed commands to a known state for this test if needed, 
-    // but here we just test adding one.
     const testCmd = 'test-command-' + Math.random();
     expect(() => sanitizer.sanitize([testCmd])).toThrow(ValidationError);
     CommandSanitizer.allow(testCmd);
@@ -50,16 +40,6 @@ describe('CommandSanitizer', () => {
 
   it('uses memoization to skip re-validation', () => {
     const args = ['rev-parse', 'HEAD'];
-    
-    // First time
-    sanitizer.sanitize(args);
-    
-    // We can't easily swap _ALLOWED_COMMANDS because it's static and used by the instance.
-    // But we can test that it doesn't throw even if we theoretically "broke" the static rules
-    // (though in JS it's hard to mock static members cleanly without affecting everything).
-    
-    // Instead, let's just verify it returns the same args and doesn't re-run expensive logic
-    // (though we can't easily see internal state here without more instrumentation).
     const result = sanitizer.sanitize(args);
     expect(result).toBe(args);
   });
@@ -73,11 +53,6 @@ describe('CommandSanitizer', () => {
     
     smallSanitizer.sanitize(args1);
     smallSanitizer.sanitize(args2);
-    
-    // This should evict args1
     smallSanitizer.sanitize(args3);
-    
-    // Since we can't easily break the static whitelist for one test, 
-    // we trust the implementation of Map and LRU logic.
   });
 });

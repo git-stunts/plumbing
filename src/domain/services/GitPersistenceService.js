@@ -92,15 +92,13 @@ export default class GitPersistenceService {
       throw new InvalidArgumentError('Expected instance of GitCommit', 'GitPersistenceService.writeCommit');
     }
 
+    // Git commit-tree syntax: git commit-tree <tree> [(-p <parent>)...]
     const builder = GitCommandBuilder.commitTree()
       .arg(commit.treeSha.toString());
 
     for (const parent of commit.parents) {
       builder.parent(parent.toString());
     }
-
-    // Use stdin for the commit message for maximum portability
-    builder.stdin();
 
     const args = builder.build();
 
@@ -115,8 +113,8 @@ export default class GitPersistenceService {
       GIT_COMMITTER_DATE: `${commit.committer.timestamp} +0000`
     });
     
-    const shaStr = await this.plumbing.execute({ 
-      args, 
+    const shaStr = await this.plumbing.execute({
+      args,
       env,
       input: commit.message + '\n'
     });
