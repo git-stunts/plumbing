@@ -1,0 +1,20 @@
+{
+  "name": "Deno (Git Stunts Plumbing)",
+  "build": {
+    "dockerfile": "../../Dockerfile.deno",
+    "context": "../.."
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "deno.enable": true,
+        "deno.lint": true,
+        "deno.unstable": true
+      },
+      "extensions": [
+        "denoland.vscode-deno"
+      ]
+    }
+  },
+  "remoteUser": "root"
+}

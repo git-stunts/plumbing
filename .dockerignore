@@ -1,0 +1,6 @@
+node_modules
+.git
+.crush
+scripts
+docker-compose.yml
+Dockerfile.*

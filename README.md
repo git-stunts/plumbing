@@ -1,55 +1,190 @@
 # @git-stunts/plumbing
 
-A robust, class-based wrapper for Git binary execution. Designed for "Git Stunts" applications that bypass the porcelain and interact directly with the object database.
+A low-level, robust, and environment-agnostic Git plumbing library for the modern JavaScript ecosystem. Built with **Hexagonal Architecture** and **Domain-Driven Design (DDD)**, it provides a secure, streaming-first, and type-safe interface for Git operations across **Node.js, Bun, and Deno**.
 
-## Features
+## 🚀 Key Features
 
-- **Class-based API**: Encapsulates `cwd` and state.
-- **Zero Dependencies**: Uses Node.js standard library.
-- **Plumbing First**: Optimized for `commit-tree`, `hash-object`, and `update-ref`.
-- **Telemetry**: Error messages include `stdout` and `stderr` for easier debugging.
+- **Streaming-First Architecture**: Unified "Streaming Only" pattern across all runtimes for consistent, memory-efficient data handling.
+- **Multi-Runtime Support**: Native adapters for Node.js, Bun, and Deno with automatic environment detection.
+- **Robust Schema Validation**: Powered by **Zod**, ensuring every Entity and Value Object is valid before use.
+- **Hexagonal Architecture**: Strict separation between core domain logic and infrastructure adapters.
+- **Dependency Injection**: Core services like `CommandSanitizer` and `ExecutionOrchestrator` are injectable for maximum testability and customization.
+- **Execution Orchestration**: Centralized retry and lock-detection logic powered by a dedicated `GitErrorClassifier`.
+- **OOM Protection**: Integrated safety buffering (`GitStream.collect`) with configurable byte limits.
+- **Type-Safe Domain**: Formalized Value Objects for `GitSha`, `GitRef`, `GitFileMode`, and `GitSignature`.
+- **Hardened Security**: Integrated `CommandSanitizer` to prevent argument injection attacks and `EnvironmentPolicy` for clean process isolation.
+- **Process Isolation**: Every Git process runs in a sanitized environment, whitelisting only essential variables (`GIT_AUTHOR_*`, `LANG`, etc.) to prevent leakage.
+- **Dockerized CI**: Parallel test execution across all runtimes using isolated containers.
 
-## Installation
+## 📋 Prerequisites
+
+- **System Git**: Requires Git >= 2.30.0 installed on the host system.
+- **Node.js**: >= 22.0.0
+- **Bun**: >= 1.3.5
+- **Deno**: >= 2.0.0
+
+## 📦 Installation
 
 ```bash
 npm install @git-stunts/plumbing
 ```
 
-## Usage
+## 🛠️ Usage
+
+### Zero-Config Initialization
+
+Version 2.0.0 introduced `createDefault()`, and version 2.7.0 adds `createRepository()` which automatically detect your runtime and set up the appropriate runner for a fast, zero-config start.
 
 ```javascript
-import GitPlumbing from '@git-stunts/plumbing';
+import GitPlumbing, { GitSha } from '@git-stunts/plumbing';
 
-const git = new GitPlumbing({ cwd: './my-repo' });
+// Get a high-level service in one line
+const git = GitPlumbing.createRepository({ cwd: './my-repo' });
 
-// Create a blob
-const blobOid = git.execute({ 
-  args: ['hash-object', '-w', '--stdin'], 
-  input: 'Hello world' 
-});
+// Securely resolve references
+const headSha = await git.revParse({ revision: 'HEAD' });
 
-// Create a commit pointing to the empty tree
-const commitSha = git.execute({
-  args: ['commit-tree', git.emptyTree, '-m', 'Stunt #1'],
-});
-
-// Update a ref
-git.updateRef({ 
-  ref: 'refs/_blog/stunt', 
-  newSha: commitSha 
+// Create a commit from files with built-in concurrency protection
+const commitSha = await git.createCommitFromFiles({
+  branch: 'refs/heads/main',
+  message: 'Feat: high-level orchestration',
+  author: {
+    name: 'James Ross',
+    email: 'james@flyingrobots.dev'
+  },
+  committer: {
+    name: 'James Ross',
+    email: 'james@flyingrobots.dev'
+  },
+  parents: [GitSha.from(headSha)],
+  files: [
+    { path: 'hello.txt', content: 'Hello World' },
+    { path: 'script.sh', content: '#!/bin/sh\necho hi', mode: '100755' }
+  ],
+  concurrency: 10 // Optional: limit parallel Git processes
 });
 ```
 
-## API
+### Custom Runners
 
-### `new GitPlumbing({ cwd })`
-Creates a new instance tied to a specific directory.
+Extend the library for exotic environments like SSH or WASM by registering a custom runner class.
 
-### `execute({ args, input })`
-Executes a git command. Throws if the command fails.
+```javascript
+import GitPlumbing, { ShellRunnerFactory } from '@git-stunts/plumbing';
 
-### `executeWithStatus({ args })`
-Executes a git command and returns `{ stdout, status }`, allowing you to handle non-zero exit codes (like `git diff`) without throwing.
+class MySshRunner {
+  async run({ command, args, cwd, input, timeout, env }) { 
+    /* custom implementation returning { stdoutStream, exitPromise } */ 
+  }
+}
 
-### `emptyTree`
-Property returning the well-known SHA-1 of the empty tree.
+// Register and use
+ShellRunnerFactory.register('ssh', MySshRunner);
+const git = GitPlumbing.createDefault({ env: 'ssh' });
+```
+
+### Fluent Command Building
+
+Construct complex plumbing commands with a type-safe, fluent API.
+
+```javascript
+import { GitCommandBuilder } from '@git-stunts/plumbing';
+
+const args = GitCommandBuilder.hashObject()
+  .write()
+  .stdin()
+  .build(); // ['hash-object', '-w', '--stdin']
+
+const catArgs = GitCommandBuilder.catFile()
+  .pretty()
+  .arg('HEAD:README.md')
+  .build(); // ['cat-file', '-p', 'HEAD:README.md']
+```
+
+### Core Entities
+
+The library uses immutable Value Objects and Zod-validated Entities to ensure data integrity.
+
+```javascript
+import { GitSha, GitRef, GitSignature } from '@git-stunts/plumbing';
+
+// Validate and normalize SHAs (throws ValidationError if invalid)
+const sha = GitSha.from('a1b2c3d4e5f67890123456789012345678901234');
+
+// Safe reference handling (implements git-check-ref-format)
+const mainBranch = GitRef.branch('main');
+
+// Structured signatures
+const author = new GitSignature({
+  name: 'James Ross',
+  email: 'james@flyingrobots.dev'
+});
+```
+
+### Streaming Power
+
+All commands are streaming-first. You can consume them as async iterables or collect them with safety guards.
+
+```javascript
+const stream = await git.executeStream({ args: ['cat-file', '-p', 'HEAD'] });
+
+// Consume as async iterable
+for await (const chunk of stream) {
+  process.stdout.write(chunk);
+}
+
+// OR collect with OOM protection (default 10MB)
+const output = await stream.collect({ maxBytes: 1024 * 1024, asString: true });
+```
+
+### Binary Support
+
+You can now collect raw bytes to handle binary blobs without corruption.
+
+```javascript
+const stream = await git.executeStream({ args: ['cat-file', '-p', 'HEAD:image.png'] });
+const buffer = await stream.collect({ asString: false }); // Returns Uint8Array
+```
+
+## 🏗️ Architecture
+
+This project strictly adheres to modern engineering principles:
+- **1 File = 1 Class/Concept**: Modular, focused files for maximum maintainability.
+- **Dependency Inversion (DI)**: Domain logic depends on functional ports, not runtime-specific APIs.
+- **No Magic Values**: All internal constants, timeouts, and buffer limits are centralized in the port layer.
+- **Serializability**: Every domain object implements `toJSON()` for seamless interoperability.
+
+For a deeper dive, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+## 📖 Documentation
+
+- [**Git Commit Lifecycle**](./docs/COMMIT_LIFECYCLE.md) - **Recommended**: A step-by-step guide to building and persisting Git objects.
+- [**Custom Runners**](./docs/CUSTOM_RUNNERS.md) - How to implement and register custom execution adapters.
+- [**Architecture & Design**](./ARCHITECTURE.md) - Deep dive into the hexagonal architecture and design principles.
+- [**Workflow Recipes**](./docs/RECIPES.md) - Step-by-step guides for common Git plumbing tasks (e.g., manual commits).
+- [**Contributing**](./CONTRIBUTING.md) - Guidelines for contributing to the project.
+
+## 🧪 Testing
+
+We take cross-platform compatibility seriously. Our test suite runs in parallel across all supported runtimes using Docker.
+
+```bash
+npm test          # Multi-runtime Docker tests
+npm run test:local # Local vitest run
+```
+
+## 💻 Development
+
+### Dev Containers
+Specialized environments are provided for each runtime. Open this project in VS Code and select a container:
+- `.devcontainer/node`
+- `.devcontainer/bun`
+- `.devcontainer/deno`
+
+### Git Hooks
+- **Pre-commit**: Runs ESLint to ensure code style and SRP adherence.
+- **Pre-push**: Runs the full Docker-based multi-runtime test suite.
+
+## 📄 License
+
+Apache-2.0

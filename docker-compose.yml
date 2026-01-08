@@ -1,0 +1,17 @@
+services:
+  node-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    environment:
+      - NODE_ENV=test
+
+  bun-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.bun
+
+  deno-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.deno

@@ -1,11 +1,27 @@
 {
   "name": "@git-stunts/plumbing",
-  "version": "1.0.0",
+  "version": "2.7.0",
   "description": "Git Stunts Lego Block: plumbing",
   "type": "module",
   "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./ShellRunner": "./ShellRunner.js",
+    "./sha": "./src/domain/value-objects/GitSha.js",
+    "./ref": "./src/domain/value-objects/GitRef.js",
+    "./mode": "./src/domain/value-objects/GitFileMode.js",
+    "./signature": "./src/domain/value-objects/GitSignature.js",
+    "./errors": "./src/domain/errors/GitPlumbingError.js"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "bun": ">=1.3.5",
+    "deno": ">=2.0.0"
+  },
   "scripts": {
-    "test": "vitest run",
+    "test": "./scripts/run-multi-runtime-tests.sh",
+    "test:local": "vitest run --globals",
+    "prepare": "test -d .git && git config core.hooksPath scripts || true",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -18,6 +34,6 @@
     "@eslint/js": "^9.17.0",
     "eslint": "^9.17.0",
     "prettier": "^3.4.2",
-    "vitest": "^2.1.8"
+    "vitest": "^3.0.0"
   }
 }
