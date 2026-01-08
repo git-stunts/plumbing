@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitCommandBuilder Fluidity**: Expanded the fluent API with factory methods and flags for all whitelisted commands.
 - **Tooling**: Upgraded `vitest` to `^3.0.0` and updated `package.json` to version `2.0.0`.
 
+### Fixed
+- **CI/CD Reliability**: Updated `run-multi-runtime-tests.sh` to support both modern `docker compose` (V2) and legacy `docker-compose` (V1), resolving CI failures on GitHub Actions.
+
 ### Added
 - **Unified Streaming Architecture**: Refactored all shell runners (Node, Bun, Deno) to use a single "Streaming Only" pattern.
 - **Exhaustive Zod Schemas**: Centralized validation in `src/domain/schemas` using Zod for all Entities and Value Objects.
