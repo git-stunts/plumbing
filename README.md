@@ -1,6 +1,9 @@
 # @git-stunts/plumbing
 
 [![npm version](https://img.shields.io/npm/v/@git-stunts/plumbing.svg)](https://www.npmjs.com/package/@git-stunts/plumbing)
+[![npm downloads](https://img.shields.io/npm/dm/@git-stunts/plumbing.svg)](https://www.npmjs.com/package/@git-stunts/plumbing)
+[![CI](https://github.com/git-stunts/plumbing/actions/workflows/ci.yml/badge.svg)](https://github.com/git-stunts/plumbing/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/@git-stunts/plumbing.svg)](LICENSE)
 
 <img width="420" alt="Tux Plumber Chaos" src="https://github.com/user-attachments/assets/22e0e7e3-0587-48a8-aec5-6ec51e3d7fa6" align="right" />
 
