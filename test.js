@@ -2,7 +2,7 @@
  * @fileoverview Integration tests for GitPlumbing
  */
 
-import { ensureDocker } from './src/infrastructure/DockerGuard.js';
+import { ensureDocker } from '@git-stunts/docker-guard';
 
 ensureDocker();
 

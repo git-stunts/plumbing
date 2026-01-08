@@ -32,6 +32,14 @@ docker-compose run --rm node-test
 
 The system will automatically fail if `GIT_STUNTS_DOCKER=1` is not set.
 
+We load `@git-stunts/docker-guard` before every suite (`test/support/ensure-docker.js`), so invoking `ensureDocker()` happens automatically for Vitest/Bun/Deno. You can copy the same pattern in other packages:
+
+```javascript
+import { ensureDocker } from '@git-stunts/docker-guard';
+
+ensureDocker();
+```
+
 ## 🏗️ Design Principles
 
 1.  **Git as a Subsystem**: Git is treated as an external, untrusted dependency. Every command and environment variable is sanitized.

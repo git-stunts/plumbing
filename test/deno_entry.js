@@ -1,3 +1,4 @@
+import "./support/ensure-docker.js";
 import "./deno_shim.js";
 
 // Import all tests to run them in one Deno process with the shim
