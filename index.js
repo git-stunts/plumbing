@@ -16,10 +16,6 @@ import GitRepositoryService from './src/domain/services/GitRepositoryService.js'
 import ExecutionOrchestrator from './src/domain/services/ExecutionOrchestrator.js';
 import GitBinaryChecker from './src/domain/services/GitBinaryChecker.js';
 import GitCommandBuilder from './src/domain/services/GitCommandBuilder.js';
-import GitBlob from './src/domain/entities/GitBlob.js';
-import GitTree from './src/domain/entities/GitTree.js';
-import GitTreeEntry from './src/domain/entities/GitTreeEntry.js';
-import GitCommit from './src/domain/entities/GitCommit.js';
 
 export { GitCommandBuilder };
 
@@ -65,48 +61,13 @@ export default class GitPlumbing {
 
   /**
    * Orchestrates a full commit sequence from content to reference update.
+   * Delegates to GitRepositoryService.
    * @param {Object} options
-   * @param {string} options.branch - The reference to update (e.g., 'refs/heads/main')
-   * @param {string} options.message - Commit message
-   * @param {import('./src/domain/value-objects/GitSignature.js').default} options.author
-   * @param {import('./src/domain/value-objects/GitSignature.js').default} options.committer
-   * @param {import('./src/domain/value-objects/GitSha.js').default[]} options.parents
-   * @param {Array<{path: string, content: string|Uint8Array, mode: string}>} options.files
    * @returns {Promise<GitSha>} The resulting commit SHA.
    */
-  async commit({ branch, message, author, committer, parents, files }) {
+  async commit(options) {
     const repo = new GitRepositoryService({ plumbing: this });
-    
-    // 1. Write Blobs
-    const entries = await Promise.all(files.map(async (file) => {
-      const blob = GitBlob.fromContent(file.content);
-      const sha = await repo.writeBlob(blob);
-      return new GitTreeEntry({
-        path: file.path,
-        sha,
-        mode: file.mode || '100644'
-      });
-    }));
-
-    // 2. Write Tree
-    const tree = new GitTree(null, entries);
-    const treeSha = await repo.writeTree(tree);
-
-    // 3. Write Commit
-    const commit = new GitCommit({
-      sha: null,
-      treeSha,
-      parents,
-      author,
-      committer,
-      message
-    });
-    const commitSha = await repo.writeCommit(commit);
-
-    // 4. Update Reference
-    await repo.updateRef({ ref: branch, newSha: commitSha });
-
-    return commitSha;
+    return repo.createCommitFromFiles(options);
   }
 
   /**

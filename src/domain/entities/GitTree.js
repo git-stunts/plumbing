@@ -85,6 +85,20 @@ export default class GitTree {
   }
 
   /**
+   * Serializes the tree entries into the format expected by `git mktree`.
+   * Format: <mode> <type> <sha>\t<path>
+   * @returns {string}
+   */
+  toMktreeFormat() {
+    return this._entries
+      .map(entry => {
+        const type = entry.isTree() ? 'tree' : 'blob';
+        return `${entry.mode} ${type} ${entry.sha}\t${entry.path}`;
+      })
+      .join('\n') + '\n';
+  }
+
+  /**
    * Checks if the tree has been written to the repository
    * @returns {boolean}
    */

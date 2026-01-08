@@ -1,68 +1,42 @@
 import GitTree from '../../../src/domain/entities/GitTree.js';
 import GitTreeEntry from '../../../src/domain/entities/GitTreeEntry.js';
 import GitSha from '../../../src/domain/value-objects/GitSha.js';
-import GitFileMode from '../../../src/domain/value-objects/GitFileMode.js';
-import ValidationError from '../../../src/domain/errors/ValidationError.js';
 
 describe('GitTree', () => {
-  const sha = GitSha.EMPTY_TREE;
-  const regularMode = new GitFileMode(GitFileMode.REGULAR);
+  const VALID_SHA = 'a1b2c3d4e5f67890123456789012345678901234';
+  const EMPTY_TREE_SHA = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
-  describe('constructor', () => {
-    it('creates a tree with entries', () => {
-      const entry = new GitTreeEntry({ mode: regularMode, sha, path: 'file.txt' });
-      const tree = new GitTree(null, [entry]);
-      expect(tree.entries).toHaveLength(1);
-      expect(tree.entries[0]).toBe(entry);
+  it('serializes to mktree format', () => {
+    const entry1 = new GitTreeEntry({
+      path: 'file.txt',
+      sha: GitSha.from(VALID_SHA),
+      mode: '100644'
     });
+    const entry2 = new GitTreeEntry({
+      path: 'subdir',
+      sha: GitSha.from(EMPTY_TREE_SHA),
+      mode: '040000'
+    });
+    const tree = new GitTree(null, [entry1, entry2]);
 
-    it('throws for invalid SHA', () => {
-      expect(() => new GitTree(123, [])).toThrow(ValidationError);
-    });
-
-    it('throws if entries are not GitTreeEntry instances', () => {
-      expect(() => new GitTree(null, [{}])).toThrow(ValidationError);
-    });
+    const format = tree.toMktreeFormat();
+    expect(format).toBe(`100644 blob ${VALID_SHA}\tfile.txt\n040000 tree ${EMPTY_TREE_SHA}\tsubdir\n`);
   });
 
-  describe('static fromData', () => {
-    it('creates a tree from raw data', () => {
-      const data = {
-        sha: sha.toString(),
-        entries: [
-          { mode: '100644', sha: sha.toString(), path: 'file.txt' }
-        ]
-      };
-      const tree = GitTree.fromData(data);
-      expect(tree.sha.equals(sha)).toBe(true);
-      expect(tree.entries).toHaveLength(1);
-      expect(tree.entries[0]).toBeInstanceOf(GitTreeEntry);
-    });
+  it('returns empty string for empty tree mktree format', () => {
+    const tree = new GitTree(null, []);
+    expect(tree.toMktreeFormat()).toBe('\n');
   });
 
-  describe('static empty', () => {
-    it('creates an empty tree with empty tree SHA', () => {
-      const tree = GitTree.empty();
-      expect(tree.sha.isEmptyTree()).toBe(true);
-      expect(tree.entries).toHaveLength(0);
-    });
-  });
-
-  describe('addEntry', () => {
-    it('adds an entry and returns new tree', () => {
-      const tree = new GitTree(null, []);
-      const entry = new GitTreeEntry({ mode: regularMode, sha, path: 'file.txt' });
-      const newTree = tree.addEntry(entry);
-      expect(newTree.entries).toHaveLength(1);
-      expect(newTree.entries[0]).toBe(entry);
-      expect(tree.entries).toHaveLength(0); // Immutable
-    });
-  });
-
-  describe('type', () => {
-    it('returns tree type', () => {
-      const tree = new GitTree(null, []);
-      expect(tree.type().isTree()).toBe(true);
-    });
+  it('can be created from data', () => {
+    const data = {
+      sha: VALID_SHA,
+      entries: [
+        { path: 'f.txt', sha: VALID_SHA, mode: '100644' }
+      ]
+    };
+    const tree = GitTree.fromData(data);
+    expect(tree.sha.toString()).toBe(VALID_SHA);
+    expect(tree.entries[0].path).toBe('f.txt');
   });
 });

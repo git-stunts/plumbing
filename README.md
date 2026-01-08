@@ -34,8 +34,18 @@ import GitPlumbing from '@git-stunts/plumbing';
 // Get a high-level service in one line
 const git = GitPlumbing.createRepository({ cwd: './my-repo' });
 
-// The GitRepositoryService is now decoupled from the core GitPlumbing instance
-// but can still be easily instantiated or used via the static factory.
+// Create a commit from files with built-in concurrency protection
+const commitSha = await git.createCommitFromFiles({
+  branch: 'refs/heads/main',
+  message: 'Feat: high-level orchestration',
+  author: author,
+  committer: author,
+  parents: [GitSha.from(headSha)],
+  files: [
+    { path: 'hello.txt', content: 'Hello World' }
+  ],
+  concurrency: 10 // Optional: limit parallel Git processes
+});
 ```
 
 ### Custom Runners

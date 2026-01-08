@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Core Infrastructure for Production Stability**: Massive overhaul of the streaming and validation layers to support high-concurrency production workloads.
 - **Security Layer & Service Decoupling**: Implemented strict environment and command isolation.
 - **Orchestration & Error Handling**: Enhanced retry logic with total operation timeouts and robust error classification.
+- **Domain Persistence Layer**: Implemented high-level persistence orchestration with resource protection.
 
 ### Changed
 - **GitStream Resource Management**: Replaced `FinalizationRegistry` with manual `try...finally` cleanup patterns.
@@ -21,10 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CommandSanitizer Enhancement**: Converted to an injectable instance with an internal cache for repetitive commands. Blocks global flags before the subcommand.
 - **EnvironmentPolicy Hardening**: Whitelists only essential variables and explicitly blocks `GIT_CONFIG_PARAMETERS`.
 - **ShellRunnerFactory Decoupling**: Added `ShellRunnerFactory.register(name, RunnerClass)` for custom adapter registration.
-- **ExecutionOrchestrator Total Timeout**: Implemented `totalTimeout` (Total Operation Timeout) that overrides retries if the total operation duration exceeds the limit.
-- **GitErrorClassifier Enhancement**: Now uses regex for robust lock contention detection (`index.lock`) and supports constructor-injected `customRules` for extensible error handling.
-- **GitPlumbing Decoupling**: Removed automatic instantiation of `GitRepositoryService` inside the `GitPlumbing` constructor to resolve a circular dependency.
-- **GitBinaryChecker Extraction**: Extracted Git binary and work-tree verification logic into a dedicated `GitBinaryChecker` service, improving testability and allowing for easier mocking.
+- **ExecutionOrchestrator Total Timeout**: Implemented `totalTimeout` that overrides retries.
+- **GitErrorClassifier Enhancement**: Now uses regex for robust lock contention detection and supports `customRules`.
+- **GitPlumbing Decoupling**: Removed automatic instantiation of `GitRepositoryService` inside the constructor.
+- **GitBinaryChecker Extraction**: Extracted verification logic into a dedicated service.
+- **GitRepositoryService.createCommitFromFiles**: Implemented with a concurrency limit (default 10) for writing blobs to prevent OOM/PID exhaustion.
+- **GitTree.toMktreeFormat**: Encapsulated serialization of tree entries into the internal entity logic.
+- **GitPersistenceService Security**: Ensured all Git execution calls pass their environment through `EnvironmentPolicy.filter()`.
+- **GitCommandBuilder Fluidity**: Expanded the fluent API with factory methods and flags for all whitelisted commands.
 - **Tooling**: Upgraded `vitest` to `^3.0.0` and updated `package.json` to version `2.0.0`.
 
 ### Added

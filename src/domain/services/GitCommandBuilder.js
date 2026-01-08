@@ -3,7 +3,8 @@
  */
 
 /**
- * Fluent builder for git command arguments
+ * Fluent builder for git command arguments.
+ * Provides a type-safe and expressive API for constructing Git plumbing commands.
  */
 export default class GitCommandBuilder {
   /**
@@ -99,7 +100,7 @@ export default class GitCommandBuilder {
   }
 
   /**
-   * Adds the -p flag (parent)
+   * Adds the -p flag (parent) - Note: shared with pretty-print in some commands
    * @param {string} sha
    * @returns {GitCommandBuilder}
    */
@@ -109,11 +110,47 @@ export default class GitCommandBuilder {
   }
 
   /**
-   * Adds the delete flag
+   * Adds the -d flag (delete)
    * @returns {GitCommandBuilder}
    */
   delete() {
     this._args.push('-d');
+    return this;
+  }
+
+  /**
+   * Adds the -z flag (NUL-terminated output)
+   * @returns {GitCommandBuilder}
+   */
+  nul() {
+    this._args.push('-z');
+    return this;
+  }
+
+  /**
+   * Adds the --batch flag
+   * @returns {GitCommandBuilder}
+   */
+  batch() {
+    this._args.push('--batch');
+    return this;
+  }
+
+  /**
+   * Adds the --batch-check flag
+   * @returns {GitCommandBuilder}
+   */
+  batchCheck() {
+    this._args.push('--batch-check');
+    return this;
+  }
+
+  /**
+   * Adds the --all flag
+   * @returns {GitCommandBuilder}
+   */
+  all() {
+    this._args.push('--all');
     return this;
   }
 

@@ -5,6 +5,10 @@
 import GitSha from '../value-objects/GitSha.js';
 import GitCommandBuilder from './GitCommandBuilder.js';
 import GitPersistenceService from './GitPersistenceService.js';
+import GitBlob from '../entities/GitBlob.js';
+import GitTree from '../entities/GitTree.js';
+import GitTreeEntry from '../entities/GitTreeEntry.js';
+import GitCommit from '../entities/GitCommit.js';
 
 /**
  * GitRepositoryService provides high-level operations on a Git repository.
@@ -19,6 +23,75 @@ export default class GitRepositoryService {
   constructor({ plumbing, persistence = new GitPersistenceService({ plumbing }) }) {
     this.plumbing = plumbing;
     this.persistence = persistence;
+  }
+
+  /**
+   * Orchestrates a full commit sequence from files and metadata.
+   * Uses a concurrency limit to prevent resource exhaustion during blob creation.
+   * @param {Object} options
+   * @param {string} options.branch - The reference to update (e.g., 'refs/heads/main')
+   * @param {string} options.message - Commit message
+   * @param {import('../value-objects/GitSignature.js').default} options.author
+   * @param {import('../value-objects/GitSignature.js').default} options.committer
+   * @param {import('../value-objects/GitSha.js').default[]} options.parents
+   * @param {Array<{path: string, content: string|Uint8Array, mode: string}>} options.files
+   * @param {number} [options.concurrency=10] - Max parallel blob write operations.
+   * @returns {Promise<GitSha>} The resulting commit SHA.
+   */
+  async createCommitFromFiles({ 
+    branch, 
+    message, 
+    author, 
+    committer, 
+    parents, 
+    files, 
+    concurrency = 10 
+  }) {
+    const entries = [];
+    const remainingFiles = [...files];
+    
+    // Concurrency limit for writing blobs
+    const processBatch = async () => {
+      const batch = remainingFiles.splice(0, concurrency);
+      if (batch.length === 0) {return;}
+
+      const batchResults = await Promise.all(batch.map(async (file) => {
+        const blob = GitBlob.fromContent(file.content);
+        const sha = await this.writeBlob(blob);
+        return new GitTreeEntry({
+          path: file.path,
+          sha,
+          mode: file.mode || '100644'
+        });
+      }));
+
+      entries.push(...batchResults);
+      await processBatch();
+    };
+
+    await processBatch();
+
+    // 2. Write Tree
+    const tree = new GitTree(null, entries);
+    const treeSha = await this.writeTree(tree);
+
+    // 3. Write Commit
+    const commit = new GitCommit({
+      sha: null,
+      treeSha,
+      parents,
+      author,
+      committer,
+      message
+    });
+    const commitSha = await this.writeCommit(commit);
+
+    // 4. Update Reference
+    if (branch) {
+      await this.updateRef({ ref: branch, newSha: commitSha });
+    }
+
+    return commitSha;
   }
 
   /**

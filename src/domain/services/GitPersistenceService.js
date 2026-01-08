@@ -8,6 +8,7 @@ import GitBlob from '../entities/GitBlob.js';
 import GitTree from '../entities/GitTree.js';
 import GitCommit from '../entities/GitCommit.js';
 import InvalidArgumentError from '../errors/InvalidArgumentError.js';
+import EnvironmentPolicy from './EnvironmentPolicy.js';
 
 /**
  * GitPersistenceService implements the persistence logic for Git entities.
@@ -70,11 +71,7 @@ export default class GitPersistenceService {
       throw new InvalidArgumentError('Expected instance of GitTree', 'GitPersistenceService.writeTree');
     }
 
-    // mktree expects: <mode> <type> <sha>\t<path>
-    const input = tree.entries
-      .map(entry => `${entry.mode} ${entry.sha.isEmptyTree() ? 'tree' : 'blob'} ${entry.sha}\t${entry.path}`)
-      .join('\n') + '\n';
-
+    const input = tree.toMktreeFormat();
     const args = GitCommandBuilder.mktree().build();
 
     const shaStr = await this.plumbing.execute({
@@ -106,14 +103,15 @@ export default class GitPersistenceService {
 
     const args = builder.build();
 
-    const env = {
+    // Ensure environment is filtered through policy
+    const env = EnvironmentPolicy.filter({
       GIT_AUTHOR_NAME: commit.author.name,
       GIT_AUTHOR_EMAIL: commit.author.email,
       GIT_AUTHOR_DATE: commit.author.timestamp.toString(),
       GIT_COMMITTER_NAME: commit.committer.name,
       GIT_COMMITTER_EMAIL: commit.committer.email,
       GIT_COMMITTER_DATE: commit.committer.timestamp.toString()
-    };
+    });
     
     const shaStr = await this.plumbing.execute({ args, env });
 
