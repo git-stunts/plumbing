@@ -16,6 +16,13 @@ A low-level, robust, and environment-agnostic Git plumbing library for the moder
 - **Process Isolation**: Every Git process runs in a sanitized environment, whitelisting only essential variables (`GIT_AUTHOR_*`, `LANG`, etc.) to prevent leakage.
 - **Dockerized CI**: Parallel test execution across all runtimes using isolated containers.
 
+## 📋 Prerequisites
+
+- **System Git**: Requires Git >= 2.30.0 installed on the host system.
+- **Node.js**: >= 20.0.0 (if using Node)
+- **Bun**: >= 1.0.0 (if using Bun)
+- **Deno**: >= 1.40.0 (if using Deno)
+
 ## 📦 Installation
 
 ```bash
@@ -29,20 +36,30 @@ npm install @git-stunts/plumbing
 Version 2.0.0 introduces `createDefault()` and `createRepository()` which automatically detect your runtime and set up the appropriate runner for a fast, zero-config start.
 
 ```javascript
-import GitPlumbing from '@git-stunts/plumbing';
+import GitPlumbing, { GitSha } from '@git-stunts/plumbing';
 
 // Get a high-level service in one line
 const git = GitPlumbing.createRepository({ cwd: './my-repo' });
+
+// Securely resolve references
+const headSha = await git.revParse({ revision: 'HEAD' });
 
 // Create a commit from files with built-in concurrency protection
 const commitSha = await git.createCommitFromFiles({
   branch: 'refs/heads/main',
   message: 'Feat: high-level orchestration',
-  author: author,
-  committer: author,
+  author: {
+    name: 'James Ross',
+    email: 'james@flyingrobots.dev'
+  },
+  committer: {
+    name: 'James Ross',
+    email: 'james@flyingrobots.dev'
+  },
   parents: [GitSha.from(headSha)],
   files: [
-    { path: 'hello.txt', content: 'Hello World' }
+    { path: 'hello.txt', content: 'Hello World' },
+    { path: 'script.sh', content: '#!/bin/sh\necho hi', mode: '100755' }
   ],
   concurrency: 10 // Optional: limit parallel Git processes
 });
@@ -142,6 +159,7 @@ For a deeper dive, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 ## 📖 Documentation
 
 - [**Git Commit Lifecycle**](./docs/COMMIT_LIFECYCLE.md) - **Recommended**: A step-by-step guide to building and persisting Git objects.
+- [**Custom Runners**](./docs/CUSTOM_RUNNERS.md) - How to implement and register custom execution adapters.
 - [**Architecture & Design**](./ARCHITECTURE.md) - Deep dive into the hexagonal architecture and design principles.
 - [**Workflow Recipes**](./docs/RECIPES.md) - Step-by-step guides for common Git plumbing tasks (e.g., manual commits).
 - [**Contributing**](./CONTRIBUTING.md) - Guidelines for contributing to the project.

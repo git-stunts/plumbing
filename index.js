@@ -5,19 +5,48 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { RunnerOptionsSchema, DEFAULT_MAX_BUFFER_SIZE } from './src/ports/RunnerOptionsSchema.js';
+
+// Value Objects
 import GitSha from './src/domain/value-objects/GitSha.js';
+import GitRef from './src/domain/value-objects/GitRef.js';
+import GitSignature from './src/domain/value-objects/GitSignature.js';
+import CommandRetryPolicy from './src/domain/value-objects/CommandRetryPolicy.js';
+
+// Entities
+import GitBlob from './src/domain/entities/GitBlob.js';
+import GitTree from './src/domain/entities/GitTree.js';
+
+// Services
 import GitPlumbingError from './src/domain/errors/GitPlumbingError.js';
 import InvalidArgumentError from './src/domain/errors/InvalidArgumentError.js';
-import CommandRetryPolicy from './src/domain/value-objects/CommandRetryPolicy.js';
 import CommandSanitizer from './src/domain/services/CommandSanitizer.js';
-import GitStream from './src/infrastructure/GitStream.js';
 import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactory.js';
 import GitRepositoryService from './src/domain/services/GitRepositoryService.js';
 import ExecutionOrchestrator from './src/domain/services/ExecutionOrchestrator.js';
 import GitBinaryChecker from './src/domain/services/GitBinaryChecker.js';
 import GitCommandBuilder from './src/domain/services/GitCommandBuilder.js';
+import GitPersistenceService from './src/domain/services/GitPersistenceService.js';
 
-export { GitCommandBuilder };
+// Infrastructure
+import GitStream from './src/infrastructure/GitStream.js';
+
+/**
+ * Named exports for public API
+ */
+export {
+  GitSha,
+  GitRef,
+  GitSignature,
+  GitBlob,
+  GitTree,
+  GitPersistenceService,
+  GitCommandBuilder,
+  ShellRunnerFactory,
+  GitPlumbingError,
+  InvalidArgumentError,
+  CommandRetryPolicy,
+  GitRepositoryService
+};
 
 /**
  * GitPlumbing provides a low-level, robust interface for executing Git plumbing commands.

@@ -6,50 +6,69 @@ This guide provides step-by-step instructions for common low-level Git workflows
 
 Creating a commit without using high-level porcelain commands (`git add`, `git commit`) involves four primary steps: hashing the content, building the tree, creating the commit object, and updating the reference.
 
+While `GitRepositoryService.createCommitFromFiles` handles this automatically, understanding the underlying plumbing is essential for complex graph manipulations.
+
 ### 1. Hash the Content (Blob)
-First, turn your files into Git blobs.
+First, turn your files into Git blobs. Use the `GitPersistenceService` or raw execution.
 
 ```javascript
-import GitPlumbing from '@git-stunts/plumbing';
+import GitPlumbing, { GitBlob, GitSha } from '@git-stunts/plumbing';
 
 const git = GitPlumbing.createDefault();
+const repo = GitPlumbing.createRepository({ plumbing: git });
 
-// Write a file to the object database
-const blobSha = await git.execute({
+// High-level way:
+const blobSha = await repo.writeBlob(GitBlob.fromContent('Hello, Git!'));
+
+// Low-level way:
+const shaStr = await git.execute({
   args: ['hash-object', '-w', '--stdin'],
-  input: 'Hello, Git Plumbing!'
+  input: 'Hello, Git!'
 });
+const lowLevelSha = GitSha.from(shaStr.trim());
 ```
 
 ### 2. Build the Tree
 Create a tree object that maps filenames to the blobs created in step 1.
 
 ```javascript
-// mktree expects a specific format: <mode> <type> <sha>\t<file>
-const treeInput = `100644 blob ${blobSha}\thello.txt\n`;
+import { GitTree, GitTreeEntry } from '@git-stunts/plumbing';
 
-const treeSha = await git.execute({
-  args: ['mktree'],
-  input: treeInput
+const entry = new GitTreeEntry({ 
+  path: 'hello.txt', 
+  sha: blobSha, 
+  mode: '100644' 
 });
+
+const tree = new GitTree(null, [entry]);
+const treeSha = await repo.writeTree(tree);
 ```
 
 ### 3. Create the Commit
 Create a commit object that points to your tree.
 
 ```javascript
-const commitSha = await git.execute({
-  args: ['commit-tree', treeSha, '-m', 'Initial commit from scratch']
+import { GitCommit, GitSignature } from '@git-stunts/plumbing';
+
+const sig = new GitSignature({ name: 'James', email: 'james@test.com' });
+
+const commit = new GitCommit({
+  sha: null,
+  treeSha,
+  parents: [], // Root commit
+  author: sig,
+  committer: sig,
+  message: 'Initial plumbing commit'
 });
+
+const commitSha = await repo.writeCommit(commit);
 ```
 
 ### 4. Update the Reference
 Point your branch (e.g., `main`) to the new commit.
 
 ```javascript
-await git.execute({
-  args: ['update-ref', 'refs/heads/main', commitSha]
-});
+await repo.updateRef({ ref: 'refs/heads/main', newSha: commitSha });
 ```
 
 ---
@@ -79,7 +98,8 @@ import { CommandRetryPolicy } from '@git-stunts/plumbing';
 
 const policy = new CommandRetryPolicy({
   maxAttempts: 5,
-  initialDelayMs: 200
+  initialDelayMs: 200,
+  totalTimeout: 5000 // 5 seconds max for the whole operation
 });
 
 try {
@@ -89,9 +109,7 @@ try {
   });
 } catch (err) {
   if (err.name === 'GitRepositoryLockedError') {
-    console.error(err.details.remediation);
+    console.error('Repository is locked. Remediation: ' + err.details.remediation);
   }
 }
-```
-
 ```
