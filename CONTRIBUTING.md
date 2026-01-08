@@ -11,6 +11,7 @@ By participating in this project, you are expected to uphold our Code of Conduct
 ### Prerequisites
 - Docker and Docker Compose
 - Node.js (for local linting)
+- **Windows Users**: Must use WSL or Git Bash to run shell-based test scripts locally.
 
 ### Workflow
 1.  **Fork the repository** and create your branch from `main`.

@@ -19,9 +19,9 @@ A low-level, robust, and environment-agnostic Git plumbing library for the moder
 ## 📋 Prerequisites
 
 - **System Git**: Requires Git >= 2.30.0 installed on the host system.
-- **Node.js**: >= 20.0.0 (if using Node)
-- **Bun**: >= 1.0.0 (if using Bun)
-- **Deno**: >= 1.40.0 (if using Deno)
+- **Node.js**: >= 22.0.0
+- **Bun**: >= 1.3.5
+- **Deno**: >= 2.0.0
 
 ## 📦 Installation
 
@@ -33,7 +33,7 @@ npm install @git-stunts/plumbing
 
 ### Zero-Config Initialization
 
-Version 2.0.0 introduces `createDefault()` and `createRepository()` which automatically detect your runtime and set up the appropriate runner for a fast, zero-config start.
+Version 2.0.0 introduced `createDefault()`, and version 2.7.0 adds `createRepository()` which automatically detect your runtime and set up the appropriate runner for a fast, zero-config start.
 
 ```javascript
 import GitPlumbing, { GitSha } from '@git-stunts/plumbing';
