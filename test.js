@@ -2,6 +2,11 @@
  * @fileoverview Integration tests for GitPlumbing
  */
 
+import { ensureDocker } from './src/infrastructure/DockerGuard.js';
+
+ensureDocker();
+
+import './test/deno_shim.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-01-07
+
+### Added
+- **DockerGuard**: Introduced a critical safety service (`src/infrastructure/DockerGuard.js`) that prevents execution on the host machine to protect against unintended system modifications.
+- **Dockerized Workflow**: Added `Dockerfile.node`, `Dockerfile.bun`, `Dockerfile.deno`, and `docker-compose.yml` to standardize isolated testing environments.
+
+### Changed
+- **Command Whitelist Expansion**: Added `log` to the `CommandSanitizer` allowed list to support high-performance graph traversals.
+- **Strict Host Enforcement**: Updated `package.json` with a `pretest` script that enforces the `GIT_STUNTS_DOCKER` environment variable.
+
 ## [2.7.0] - 2026-01-07
 
 ### Added

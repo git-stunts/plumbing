@@ -24,7 +24,8 @@
     "prepare": "test -d .git || true",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "hooks:install": "git config core.hooksPath scripts"
+    "hooks:install": "git config core.hooksPath scripts",
+    "pretest": "[ \"$GIT_STUNTS_DOCKER\" = \"1\" ] || (echo '🚫 RUN IN DOCKER ONLY' && exit 1)"
   },
   "author": "James Ross <james@flyingrobots.dev>",
   "license": "Apache-2.0",
@@ -51,8 +52,22 @@
     "NOTICE",
     "SECURITY.md"
   ],
-  "repository": { "type": "git", "url": "git+https://github.com/git-stunts/plumbing.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/git-stunts/plumbing.git"
+  },
   "homepage": "https://github.com/git-stunts/plumbing#readme",
-  "bugs": { "url": "https://github.com/git-stunts/plumbing/issues" },
-  "keywords": ["git", "plumbing", "content-addressable", "dag", "merkle", "node", "deno", "bun"]
+  "bugs": {
+    "url": "https://github.com/git-stunts/plumbing/issues"
+  },
+  "keywords": [
+    "git",
+    "plumbing",
+    "content-addressable",
+    "dag",
+    "merkle",
+    "node",
+    "deno",
+    "bun"
+  ]
 }
