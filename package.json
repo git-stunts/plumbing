@@ -37,7 +37,7 @@
     "eslint": "^9.17.0",
     "prettier": "^3.4.2",
     "vitest": "^3.0.0",
-    "@git-stunts/docker-guard": "file:packages/docker-guard"
+    "@git-stunts/docker-guard": "^0.1.0"
   },
   "files": [
     "src",
