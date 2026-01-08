@@ -1,5 +1,7 @@
 # @git-stunts/plumbing
 
+[![npm version](https://img.shields.io/npm/v/@git-stunts/plumbing.svg)](https://www.npmjs.com/package/@git-stunts/plumbing)
+
 <img width="420" alt="Tux Plumber Chaos" src="https://github.com/user-attachments/assets/22e0e7e3-0587-48a8-aec5-6ec51e3d7fa6" align="right" />
 
 A low-level, robust, and environment-agnostic Git plumbing library for the modern JavaScript ecosystem. Built with **Hexagonal Architecture** and **Domain-Driven Design (DDD)**, it provides a secure, streaming-first, and type-safe interface for Git operations across **Node.js, Bun, and Deno**.
