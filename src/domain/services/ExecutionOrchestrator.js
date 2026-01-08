@@ -44,7 +44,6 @@ export default class ExecutionOrchestrator {
         const latency = performance.now() - startTime;
 
         // 2. Check for total operation timeout after execute() completes
-        // This is important because execute() itself might have taken a long time.
         this._checkTotalTimeout(operationStartTime, retryPolicy.totalTimeout, args, traceId);
 
         if (result.code !== 0) {
@@ -75,7 +74,7 @@ export default class ExecutionOrchestrator {
 
         return stdout.trim();
       } catch (err) {
-        // Wrap unexpected errors or rethrow classified ones
+        // Rethrow classified GitPlumbingErrors, wrap others
         if (err instanceof GitPlumbingError) {
           throw err;
         }

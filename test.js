@@ -2,8 +2,6 @@
  * @fileoverview Integration tests for GitPlumbing
  */
 
-/* global beforeEach, afterEach */
-
 import { mkdtempSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -51,11 +49,9 @@ describe('GitPlumbing', () => {
   });
 
   it('handles errors with telemetry', async () => {
-    try {
-      await plumbing.execute({ args: ['rev-parse', '--non-existent-flag'] });
-    } catch (err) {
-      expect(err.message).toContain('Git command failed');
-    }
+    await expect(
+      plumbing.execute({ args: ['rev-parse', '--non-existent-flag'] })
+    ).rejects.toThrow('Git command failed');
   });
 
   it('executes with status for non-zero exit codes', async () => {

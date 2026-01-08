@@ -9,98 +9,77 @@ The foundation of every Git repository is the blob (binary large object). Blobs 
 ```javascript
 import { GitBlob } from '@git-stunts/plumbing';
 
-// Create blobs from strings or binary data
-const readmeBlob = GitBlob.fromContent('# My Project\nHello world!');
-const scriptBlob = GitBlob.fromContent('echo "Hello from script"');
+// Create a blob from string content
+const blob = GitBlob.fromContent('Hello, Git Plumbing!');
+
+// Or from a Uint8Array
+const binaryBlob = GitBlob.fromContent(new Uint8Array([1, 2, 3]));
 ```
 
-## 🌲 2. Building the Tree
+## 🌳 2. Building GitTrees
 
-Trees map filenames to blobs (or other trees) and assign file modes (e.g., regular file, executable, directory). Use `GitTreeBuilder` for a fluent construction experience.
+Trees map filenames to blobs (or other trees) and assign file modes.
 
 ```javascript
-import { GitTreeBuilder } from '@git-stunts/plumbing';
+import { GitTree, GitTreeEntry, GitSha } from '@git-stunts/plumbing';
 
-// We need a repository service to get SHAs for our blobs
-const repo = GitPlumbing.createRepository();
+// Define entries
+const entry = new GitTreeEntry({
+  path: 'hello.txt',
+  sha: GitSha.from('...'), // The SHA returned from persisting the blob
+  mode: '100644'
+});
 
-// Write blobs first to get their SHAs
-const readmeSha = await repo.save(readmeBlob);
-const scriptSha = await repo.save(scriptBlob);
-
-// Build the tree
-const tree = new GitTreeBuilder()
-  .addEntry({
-    path: 'README.md',
-    sha: readmeSha,
-    mode: '100644'
-  })
-  .addEntry({
-    path: 'run.sh',
-    sha: scriptSha,
-    mode: '100755' // Executable
-  })
-  .build();
+// Create the tree
+const tree = new GitTree(null, [entry]);
 ```
 
-## 📝 3. Creating a GitCommit
+## 📝 3. Creating GitCommits
 
-A commit object links a tree to a specific point in time, with an author, a committer, a message, and optional parent references.
+Commits wrap trees with metadata like author, committer, and message.
 
 ```javascript
-import { GitCommitBuilder, GitSignature, GitSha } from '@git-stunts/plumbing';
+import { GitCommit, GitSignature, GitSha } from '@git-stunts/plumbing';
 
-// Persist the tree to get its SHA
-const treeSha = await repo.save(tree);
-
-// Define identity
 const author = new GitSignature({
   name: 'James Ross',
   email: 'james@flyingrobots.dev'
 });
 
-// Build the commit
-const commit = new GitCommitBuilder()
-  .tree(treeSha)
-  .message('Feat: initial architecture')
-  .author(author)
-  .committer(author)
-  // .parent('optional-parent-sha')
-  .build();
+const commit = new GitCommit({
+  sha: null,
+  treeSha: GitSha.from('...'), // The SHA returned from persisting the tree
+  parents: [], // Empty for root commit
+  author,
+  committer: author,
+  message: 'Feat: my first plumbing commit'
+});
 ```
 
-## 💾 4. Persisting the Graph
+## 💾 4. Persistence
 
-Finally, use `GitRepositoryService.save()` to persist the commit and update a reference (branch) to point to it.
+Use the `GitPersistenceService` to write these objects to the Git object database.
 
 ```javascript
-// Save the commit object
-const commitSha = await repo.save(commit);
+import GitPlumbing, { GitPersistenceService } from '@git-stunts/plumbing';
 
-// Point the 'main' branch to the new commit
+const git = GitPlumbing.createDefault();
+const persistence = new GitPersistenceService({ plumbing: git });
+
+// Save objects
+const blobSha = await persistence.writeBlob(blob);
+const treeSha = await persistence.writeTree(tree);
+const commitSha = await persistence.writeCommit(commit);
+```
+
+## 🔗 5. Updating References
+
+Finally, point a branch to your new commit.
+
+```javascript
+const repo = GitPlumbing.createRepository();
 await repo.updateRef({
   ref: 'refs/heads/main',
   newSha: commitSha
 });
-
-console.log(`Commit created successfully: ${commitSha}`);
-```
-
-## 🚀 Pro Tip: One-Call Orchestration
-
-While building the graph manually offers maximum control, you can use the high-level `commit()` method for common workflows:
-
-```javascript
-const finalSha = await git.commit({
-  branch: 'refs/heads/main',
-  message: 'Docs: update lifecycle guide',
-  author: author,
-  committer: author,
-  parents: [commitSha],
-  files: [
-    { path: 'docs/GUIDE.md', content: 'New content...' }
-  ]
-});
-```
-
 ```

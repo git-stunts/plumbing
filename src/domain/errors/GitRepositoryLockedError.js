@@ -18,7 +18,7 @@ export default class GitRepositoryLockedError extends GitPlumbingError {
       ...details,
       code: 'GIT_REPOSITORY_LOCKED',
       remediation: 'Another git process is running. If no other process is active, delete .git/index.lock to proceed.',
-      documentation: 'https://github.com/git-stunts/plumbing/blob/main/docs/TROUBLESHOOTING.md#locking'
+      documentation: 'https://github.com/git-stunts/plumbing/blob/main/docs/RECIPES.md#handling-repository-locks'
     });
     this.name = 'GitRepositoryLockedError';
   }

@@ -1,4 +1,3 @@
-
 import GitRef from '../src/domain/value-objects/GitRef.js';
 import ValidationError from '../src/domain/errors/ValidationError.js';
 
@@ -9,7 +8,8 @@ const INVALID_REF_DOT_START = '.refs/heads/main';
 const INVALID_REF_DOUBLE_DOT = 'refs/heads/../main';
 const INVALID_REF_DOT_END = 'refs/heads/main.';
 const INVALID_REF_SLASH_DOT = 'refs/heads/.main';
-const INVALID_REF_AT_SYMBOL = 'refs/heads/@';
+const INVALID_REF_AT_ALONE = '@';
+const INVALID_REF_REFLOG = 'refs/heads/foo@{bar';
 const INVALID_REF_BACKSLASH = 'refs/heads\\main';
 const INVALID_REF_CONTROL_CHARS = 'refs/heads/main\x00';
 const INVALID_REF_SPACE = 'refs/heads/main branch';
@@ -43,8 +43,12 @@ describe('GitRef', () => {
       expect(() => new GitRef(INVALID_REF_SLASH_DOT)).toThrow();
     });
 
-    it('throws error for reference with @ symbol', () => {
-      expect(() => new GitRef(INVALID_REF_AT_SYMBOL)).toThrow();
+    it("throws error for reference being '@' alone", () => {
+      expect(() => new GitRef(INVALID_REF_AT_ALONE)).toThrow();
+    });
+
+    it("throws error for reference containing '@'{", () => {
+      expect(() => new GitRef(INVALID_REF_REFLOG)).toThrow();
     });
 
     it('throws error for reference containing backslash', () => {
@@ -61,6 +65,10 @@ describe('GitRef', () => {
 
     it('throws error for reference with consecutive slashes', () => {
       expect(() => new GitRef(INVALID_REF_CONSECUTIVE_SLASHES)).toThrow();
+    });
+
+    it("allows '@' if it doesn't form reflog sequence", () => {
+      expect(() => new GitRef('refs/heads/user@feature')).not.toThrow();
     });
   });
 

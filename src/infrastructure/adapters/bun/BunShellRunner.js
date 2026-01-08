@@ -35,14 +35,14 @@ export default class BunShellRunner {
 
     const exitPromise = (async () => {
       let timeoutId;
-      const timeoutPromise = new Promise((resolve) => {
-        if (timeout) {
-          timeoutId = setTimeout(() => {
-            try { process.kill(); } catch { /* ignore */ }
-            resolve({ code: 1, stderr: 'Command timed out', timedOut: true });
-          }, timeout);
-        }
-      });
+      const timeoutPromise = timeout && timeout > 0
+        ? new Promise((resolve) => {
+            timeoutId = setTimeout(() => {
+              try { process.kill(); } catch { /* ignore */ }
+              resolve({ code: 1, stderr: 'Command timed out', timedOut: true });
+            }, timeout);
+          })
+        : null;
 
       const completionPromise = (async () => {
         const code = await process.exited;
@@ -52,6 +52,10 @@ export default class BunShellRunner {
         }
         return { code, stderr, timedOut: false };
       })();
+
+      if (!timeoutPromise) {
+        return completionPromise;
+      }
 
       return Promise.race([completionPromise, timeoutPromise]);
     })();

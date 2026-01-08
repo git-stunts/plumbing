@@ -12,16 +12,16 @@ export const GitRefSchema = z.string()
   .refine(val => !val.includes('/.'), 'Components cannot start with a dot')
   .refine(val => !val.includes('//'), 'Cannot contain consecutive slashes')
   .refine(val => !val.endsWith('.lock'), 'Cannot end with .lock')
-  .refine(val => !/[ ~^:?*[\\]/.test(val), 'Contains prohibited characters')
-  .refine(val => !val.includes('@'), "Cannot contain '@'")
+  .refine(val => {
+    // Prohibited characters: space, ~, ^, :, ?, *, [, \
+    const prohibited = [' ', '~', '^', ':', '?', '*', '[', '\\'];
+    return !prohibited.some(char => val.includes(char));
+  }, 'Contains prohibited characters')
   .refine(val => {
     // Control characters (0-31 and 127)
-    for (let i = 0; i < val.length; i++) {
-      const code = val.charCodeAt(i);
-      if (code < 32 || code === 127) {
-        return false;
-      }
-    }
-    return true;
-  }, 'Cannot contain control characters');
-
+    return !Array.from(val).some(char => {
+      const code = char.charCodeAt(0);
+      return code < 32 || code === 127;
+    });
+  }, 'Cannot contain control characters')
+  .refine(val => val !== '@' && !val.includes('@{'), "Cannot be '@' alone or contain '@{'");

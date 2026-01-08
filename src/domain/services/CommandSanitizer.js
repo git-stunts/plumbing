@@ -121,6 +121,9 @@ export default class CommandSanitizer {
     let subcommandIndex = -1;
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
+      if (typeof arg !== 'string') {
+        throw new ValidationError('Each argument must be a string', 'CommandSanitizer.sanitize', { arg });
+      }
       if (!arg.startsWith('-')) {
         subcommandIndex = i;
         break;
@@ -143,7 +146,12 @@ export default class CommandSanitizer {
     }
 
     // The base command (after global flags) must be in the whitelist
-    const command = (subcommandIndex !== -1 ? args[subcommandIndex] : args[0]).toLowerCase();
+    const commandArg = subcommandIndex !== -1 ? args[subcommandIndex] : args[0];
+    if (typeof commandArg !== 'string') {
+      throw new ValidationError('Command must be a string', 'CommandSanitizer.sanitize', { command: commandArg });
+    }
+    
+    const command = commandArg.toLowerCase();
     if (!CommandSanitizer._ALLOWED_COMMANDS.has(command)) {
       throw new ValidationError(`Prohibited git command detected: ${command}`, 'CommandSanitizer.sanitize', { command });
     }

@@ -38,18 +38,21 @@ export default class NodeShellRunner {
     });
 
     const exitPromise = new Promise((resolve) => {
-      const timeoutId = setTimeout(() => {
-        child.kill();
-        resolve({ code: 1, stderr, timedOut: true });
-      }, timeout);
+      let timeoutId;
+      if (typeof timeout === 'number' && timeout > 0) {
+        timeoutId = setTimeout(() => {
+          child.kill();
+          resolve({ code: 1, stderr, timedOut: true });
+        }, timeout);
+      }
 
       child.on('exit', (code) => {
-        clearTimeout(timeoutId);
+        if (timeoutId) {clearTimeout(timeoutId);}
         resolve({ code: code ?? 1, stderr, timedOut: false });
       });
 
       child.on('error', (err) => {
-        clearTimeout(timeoutId);
+        if (timeoutId) {clearTimeout(timeoutId);}
         resolve({ code: 1, stderr: `${stderr}\n${err.message}`, timedOut: false, error: err });
       });
     });

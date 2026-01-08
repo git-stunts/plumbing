@@ -36,62 +36,44 @@ export default class GitObjectType {
     [GitObjectType.TREE]: GitObjectType.TREE_INT,
     [GitObjectType.COMMIT]: GitObjectType.COMMIT_INT,
     [GitObjectType.TAG]: GitObjectType.TAG_INT,
-    [GitObjectType.OFS_DELTA]: GitObjectType.OFS_DELTA,
-    [GitObjectType.REF_DELTA]: GitObjectType.REF_DELTA
+    [GitObjectType.OFS_DELTA]: GitObjectType.OFS_DELTA_INT,
+    [GitObjectType.REF_DELTA]: GitObjectType.REF_DELTA_INT
   };
 
   /**
-   * @param {number} type - Internal type number (1-7)
+   * @param {number} typeInt - The integer representation of the Git object type.
    */
-  constructor(type) {
-    if (!GitObjectType.isValid(type)) {
-      throw new InvalidGitObjectTypeError(type, 'GitObjectType.constructor');
+  constructor(typeInt) {
+    if (GitObjectType.TYPE_MAP[typeInt] === undefined) {
+      throw new InvalidGitObjectTypeError(typeInt);
     }
-    this._value = type;
+    this._value = typeInt;
   }
 
   /**
-   * Validates if a number is a valid Git object type
-   * @param {number} type
+   * Creates a GitObjectType from a string name.
+   * @param {string} typeName - The string name (e.g., 'blob', 'tree').
+   * @returns {GitObjectType}
+   */
+  static fromString(typeName) {
+    const typeInt = GitObjectType.STRING_TO_INT[typeName];
+    if (typeInt === undefined) {
+      throw new InvalidGitObjectTypeError(typeName);
+    }
+    return new GitObjectType(typeInt);
+  }
+
+  /**
+   * Returns if the type is valid
+   * @param {number} typeInt
    * @returns {boolean}
    */
-  static isValid(type) {
-    if (typeof type !== 'number') {return false;}
-    return Object.values(GitObjectType.STRING_TO_INT).includes(type);
+  static isValid(typeInt) {
+    return GitObjectType.TYPE_MAP[typeInt] !== undefined;
   }
 
   /**
-   * Creates a GitObjectType from a number, throwing if invalid
-   * @param {number} type
-   * @returns {GitObjectType}
-   */
-  static fromNumber(type) {
-    return new GitObjectType(type);
-  }
-
-  /**
-   * Creates a GitObjectType from a string, throwing if invalid
-   * @param {string} type
-   * @returns {GitObjectType}
-   */
-  static fromString(type) {
-    const typeNumber = GitObjectType.STRING_TO_INT[type];
-    if (typeNumber === undefined) {
-      throw new InvalidGitObjectTypeError(type, 'GitObjectType.fromString');
-    }
-    return new GitObjectType(typeNumber);
-  }
-
-  /**
-   * Returns the object type as a string
-   * @returns {string}
-   */
-  toString() {
-    return GitObjectType.TYPE_MAP[this._value];
-  }
-
-  /**
-   * Returns the object type as a number
+   * Returns the integer representation
    * @returns {number}
    */
   toNumber() {
@@ -99,7 +81,15 @@ export default class GitObjectType {
   }
 
   /**
-   * Returns the object type as a string (for JSON serialization)
+   * Returns the string representation
+   * @returns {string}
+   */
+  toString() {
+    return GitObjectType.TYPE_MAP[this._value];
+  }
+
+  /**
+   * Returns the string representation (for JSON serialization)
    * @returns {string}
    */
   toJSON() {
@@ -107,7 +97,7 @@ export default class GitObjectType {
   }
 
   /**
-   * Checks equality with another GitObjectType using fast integer comparison
+   * Checks equality with another GitObjectType
    * @param {GitObjectType} other
    * @returns {boolean}
    */
@@ -117,55 +107,7 @@ export default class GitObjectType {
   }
 
   /**
-   * Factory method for blob type
-   * @returns {GitObjectType}
-   */
-  static blob() {
-    return new GitObjectType(GitObjectType.BLOB_INT);
-  }
-
-  /**
-   * Factory method for tree type
-   * @returns {GitObjectType}
-   */
-  static tree() {
-    return new GitObjectType(GitObjectType.TREE_INT);
-  }
-
-  /**
-   * Factory method for commit type
-   * @returns {GitObjectType}
-   */
-  static commit() {
-    return new GitObjectType(GitObjectType.COMMIT_INT);
-  }
-
-  /**
-   * Factory method for tag type
-   * @returns {GitObjectType}
-   */
-  static tag() {
-    return new GitObjectType(GitObjectType.TAG_INT);
-  }
-
-  /**
-   * Factory method for ofs-delta type
-   * @returns {GitObjectType}
-   */
-  static ofsDelta() {
-    return new GitObjectType(GitObjectType.OFS_DELTA_INT);
-  }
-
-  /**
-   * Factory method for ref-delta type
-   * @returns {GitObjectType}
-   */
-  static refDelta() {
-    return new GitObjectType(GitObjectType.REF_DELTA_INT);
-  }
-
-  /**
-   * Checks if this is a blob type
+   * Returns if this is a blob
    * @returns {boolean}
    */
   isBlob() {
@@ -173,7 +115,7 @@ export default class GitObjectType {
   }
 
   /**
-   * Checks if this is a tree type
+   * Returns if this is a tree
    * @returns {boolean}
    */
   isTree() {
@@ -181,7 +123,7 @@ export default class GitObjectType {
   }
 
   /**
-   * Checks if this is a commit type
+   * Returns if this is a commit
    * @returns {boolean}
    */
   isCommit() {
@@ -189,10 +131,18 @@ export default class GitObjectType {
   }
 
   /**
-   * Checks if this is a tag type
+   * Returns if this is a tag
    * @returns {boolean}
    */
   isTag() {
     return this._value === GitObjectType.TAG_INT;
   }
+
+  /**
+   * Static factory methods
+   */
+  static blob() { return new GitObjectType(GitObjectType.BLOB_INT); }
+  static tree() { return new GitObjectType(GitObjectType.TREE_INT); }
+  static commit() { return new GitObjectType(GitObjectType.COMMIT_INT); }
+  static tag() { return new GitObjectType(GitObjectType.TAG_INT); }
 }

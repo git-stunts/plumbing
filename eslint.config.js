@@ -12,29 +12,30 @@ export default [
         ...globals.browser, // For TextEncoder/Decoder
         Bun: 'readonly',
         Deno: 'readonly',
-        describe: 'readonly',
-        it: 'readonly',
-        expect: 'readonly',
         globalThis: 'readonly'
       }
     },
     rules: {
-      'curly': ['error', 'all'],
-      'no-unused-vars': ['error', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_' }],
-      'max-params': ['error', 7], // GitCommit needs 6
-      'max-lines-per-function': 'off',
-      'max-nested-callbacks': 'off',
-      'no-undef': 'error'
+      'no-unused-vars': ['error', { 
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_'
+      }],
+      'no-console': 'off'
     }
   },
   {
-    files: ['test/**/*.js'],
+    files: ['test/**/*.js', 'test.js', '**/*.test.js'],
     languageOptions: {
       globals: {
-        ...globals.jest, // vitest uses similar globals
+        ...globals.jest,
         describe: 'readonly',
         it: 'readonly',
-        expect: 'readonly'
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        fail: 'readonly'
       }
     }
   }
