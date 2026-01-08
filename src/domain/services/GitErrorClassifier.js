@@ -10,6 +10,15 @@ import GitRepositoryLockedError from '../errors/GitRepositoryLockedError.js';
  */
 export default class GitErrorClassifier {
   /**
+   * @param {Object} [options]
+   * @param {Array<{test: function(number, string): boolean, create: function(Object): Error}>} [options.customRules=[]]
+   */
+  constructor({ customRules = [] } = {}) {
+    /** @private */
+    this.customRules = customRules;
+  }
+
+  /**
    * Classifies a Git command failure.
    * @param {Object} options
    * @param {number} options.code
@@ -22,10 +31,17 @@ export default class GitErrorClassifier {
    * @returns {GitPlumbingError}
    */
   classify({ code, stderr, args, stdout, traceId, latency, operation }) {
-    // Check for lock contention (Exit code 128 often indicates state/lock issues)
-    const isLocked = stderr.includes('index.lock') || 
-                     stderr.includes('.lock') || 
-                     (code === 128 && stderr.includes('lock'));
+    // 1. Check custom rules first
+    for (const rule of this.customRules) {
+      if (rule.test(code, stderr)) {
+        return rule.create({ code, stderr, args, stdout, traceId, latency, operation });
+      }
+    }
+
+    // 2. Check for lock contention (Exit code 128 indicates state/lock issues)
+    // Use regex for more robust detection of lock files (index.lock or other .lock files)
+    const lockRegex = /\w+\.lock/;
+    const isLocked = code === 128 && (lockRegex.test(stderr) || stderr.includes('lock'));
 
     if (isLocked) {
       return new GitRepositoryLockedError(`Git command failed: repository is locked`, operation, {

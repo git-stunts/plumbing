@@ -13,8 +13,9 @@ export default class CommandRetryPolicy {
    * @param {number} [options.maxAttempts=3]
    * @param {number} [options.initialDelayMs=100]
    * @param {number} [options.backoffFactor=2]
+   * @param {number} [options.totalTimeout=30000] - Total timeout for all attempts in ms.
    */
-  constructor({ maxAttempts = 3, initialDelayMs = 100, backoffFactor = 2 } = {}) {
+  constructor({ maxAttempts = 3, initialDelayMs = 100, backoffFactor = 2, totalTimeout = 30000 } = {}) {
     if (maxAttempts < 1) {
       throw new InvalidArgumentError('maxAttempts must be at least 1', 'CommandRetryPolicy.constructor');
     }
@@ -22,6 +23,7 @@ export default class CommandRetryPolicy {
     this.maxAttempts = maxAttempts;
     this.initialDelayMs = initialDelayMs;
     this.backoffFactor = backoffFactor;
+    this.totalTimeout = totalTimeout;
   }
 
   /**
@@ -60,7 +62,8 @@ export default class CommandRetryPolicy {
     return {
       maxAttempts: this.maxAttempts,
       initialDelayMs: this.initialDelayMs,
-      backoffFactor: this.backoffFactor
+      backoffFactor: this.backoffFactor,
+      totalTimeout: this.totalTimeout
     };
   }
 }

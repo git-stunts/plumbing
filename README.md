@@ -34,21 +34,8 @@ import GitPlumbing from '@git-stunts/plumbing';
 // Get a high-level service in one line
 const git = GitPlumbing.createRepository({ cwd: './my-repo' });
 
-// Securely resolve references
-const headSha = await git.revParse({ revision: 'HEAD' });
-
-// Orchestrate a full commit in one call
-const commitSha = await git.commit({
-  branch: 'refs/heads/main',
-  message: 'Feat: high-level orchestration',
-  author: author,
-  committer: author,
-  parents: [GitSha.from(headSha)],
-  files: [
-    { path: 'hello.txt', content: 'Hello World' },
-    { path: 'script.sh', content: '#!/bin/sh\necho hi', mode: '100755' }
-  ]
-});
+// The GitRepositoryService is now decoupled from the core GitPlumbing instance
+// but can still be easily instantiated or used via the static factory.
 ```
 
 ### Custom Runners

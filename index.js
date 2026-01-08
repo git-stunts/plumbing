@@ -14,6 +14,7 @@ import GitStream from './src/infrastructure/GitStream.js';
 import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactory.js';
 import GitRepositoryService from './src/domain/services/GitRepositoryService.js';
 import ExecutionOrchestrator from './src/domain/services/ExecutionOrchestrator.js';
+import GitBinaryChecker from './src/domain/services/GitBinaryChecker.js';
 import GitCommandBuilder from './src/domain/services/GitCommandBuilder.js';
 import GitBlob from './src/domain/entities/GitBlob.js';
 import GitTree from './src/domain/entities/GitTree.js';
@@ -59,7 +60,7 @@ export default class GitPlumbing {
     /** @private */
     this.orchestrator = orchestrator;
     /** @private */
-    this.repo = new GitRepositoryService({ plumbing: this });
+    this.checker = new GitBinaryChecker({ plumbing: this });
   }
 
   /**
@@ -74,10 +75,12 @@ export default class GitPlumbing {
    * @returns {Promise<GitSha>} The resulting commit SHA.
    */
   async commit({ branch, message, author, committer, parents, files }) {
+    const repo = new GitRepositoryService({ plumbing: this });
+    
     // 1. Write Blobs
     const entries = await Promise.all(files.map(async (file) => {
       const blob = GitBlob.fromContent(file.content);
-      const sha = await this.repo.writeBlob(blob);
+      const sha = await repo.writeBlob(blob);
       return new GitTreeEntry({
         path: file.path,
         sha,
@@ -87,7 +90,7 @@ export default class GitPlumbing {
 
     // 2. Write Tree
     const tree = new GitTree(null, entries);
-    const treeSha = await this.repo.writeTree(tree);
+    const treeSha = await repo.writeTree(tree);
 
     // 3. Write Commit
     const commit = new GitCommit({
@@ -98,10 +101,10 @@ export default class GitPlumbing {
       committer,
       message
     });
-    const commitSha = await this.repo.writeCommit(commit);
+    const commitSha = await repo.writeCommit(commit);
 
     // 4. Update Reference
-    await this.repo.updateRef({ ref: branch, newSha: commitSha });
+    await repo.updateRef({ ref: branch, newSha: commitSha });
 
     return commitSha;
   }
@@ -138,19 +141,11 @@ export default class GitPlumbing {
    * @throws {GitPlumbingError}
    */
   async verifyInstallation() {
-    try {
-      // Check binary
-      await this.execute({ args: ['--version'] });
-      
-      // Check if inside a work tree
-      const isInside = await this.execute({ args: ['rev-parse', '--is-inside-work-tree'] });
-      if (isInside !== 'true') {
-        throw new Error('Not inside a git work tree');
-      }
-    } catch (err) {
-      throw new GitPlumbingError(`Git repository verification failed: ${err.message}`, 'GitPlumbing.verifyInstallation', { 
-        originalError: err.message,
-        code: 'GIT_VERIFICATION_FAILED'
+    await this.checker.check();
+    const isInside = await this.checker.isInsideWorkTree();
+    if (!isInside) {
+      throw new GitPlumbingError('Not inside a git work tree', 'GitPlumbing.verifyInstallation', { 
+        code: 'GIT_NOT_IN_WORK_TREE'
       });
     }
   }

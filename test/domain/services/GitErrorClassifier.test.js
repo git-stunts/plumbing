@@ -32,11 +32,31 @@ describe('GitErrorClassifier', () => {
     expect(error).toBeInstanceOf(GitRepositoryLockedError);
   });
 
+  it('allows injecting custom rules via constructor', () => {
+    class CustomError extends Error { constructor(msg) { super(msg); this.name = 'CustomError'; } }
+    
+    const customClassifier = new GitErrorClassifier({
+      customRules: [{
+        test: (code, _stderr) => code === 42,
+        create: (_opts) => new CustomError('Meaning of life error')
+      }]
+    });
+
+    const error = customClassifier.classify({
+      ...baseOptions,
+      code: 42,
+      stderr: 'The universe exploded'
+    });
+
+    expect(error.name).toBe('CustomError');
+    expect(error.message).toBe('Meaning of life error');
+  });
+
   it('classifies generic failures as GitPlumbingError', () => {
     const error = classifier.classify({
       ...baseOptions,
       code: 1,
-      stderr: 'error: unknown option `foo\''
+      stderr: "error: unknown option `foo'"
     });
 
     expect(error).toBeInstanceOf(GitPlumbingError);

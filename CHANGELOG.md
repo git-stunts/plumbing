@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Refactor
 - **Core Infrastructure for Production Stability**: Massive overhaul of the streaming and validation layers to support high-concurrency production workloads.
 - **Security Layer & Service Decoupling**: Implemented strict environment and command isolation.
+- **Orchestration & Error Handling**: Enhanced retry logic with total operation timeouts and robust error classification.
 
 ### Changed
 - **GitStream Resource Management**: Replaced `FinalizationRegistry` with manual `try...finally` cleanup patterns.
@@ -17,9 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitSha API Consolidation**: Removed `isValid`, `fromString`, and `fromStringOrNull`. Consolidated into `GitSha.from(sha)`.
 - **Enhanced Validation**: `GitSha.from` now throws `ValidationError` with help URLs.
 - **ByteMeasurer Optimization**: Optimized for Node.js, Bun, and Deno runtimes.
-- **CommandSanitizer Enhancement**: Converted to an injectable instance with an internal cache for repetitive commands. Now blocks global flags like `-C`, `-c`, and `--git-dir` if they appear before the subcommand.
-- **EnvironmentPolicy Hardening**: Whitelists only essential variables (`GIT_AUTHOR_*`, `GIT_COMMITTER_*`, `LANG`, `LC_ALL`) and explicitly blocks `GIT_CONFIG_PARAMETERS`.
-- **ShellRunnerFactory Decoupling**: Added `ShellRunnerFactory.register(name, RunnerClass)` to allow custom adapter registration (e.g., SSH, WASM) without modifying core library code.
+- **CommandSanitizer Enhancement**: Converted to an injectable instance with an internal cache for repetitive commands. Blocks global flags before the subcommand.
+- **EnvironmentPolicy Hardening**: Whitelists only essential variables and explicitly blocks `GIT_CONFIG_PARAMETERS`.
+- **ShellRunnerFactory Decoupling**: Added `ShellRunnerFactory.register(name, RunnerClass)` for custom adapter registration.
+- **ExecutionOrchestrator Total Timeout**: Implemented `totalTimeout` (Total Operation Timeout) that overrides retries if the total operation duration exceeds the limit.
+- **GitErrorClassifier Enhancement**: Now uses regex for robust lock contention detection (`index.lock`) and supports constructor-injected `customRules` for extensible error handling.
+- **GitPlumbing Decoupling**: Removed automatic instantiation of `GitRepositoryService` inside the `GitPlumbing` constructor to resolve a circular dependency.
+- **GitBinaryChecker Extraction**: Extracted Git binary and work-tree verification logic into a dedicated `GitBinaryChecker` service, improving testability and allowing for easier mocking.
 - **Tooling**: Upgraded `vitest` to `^3.0.0` and updated `package.json` to version `2.0.0`.
 
 ### Added
