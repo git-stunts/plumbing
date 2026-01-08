@@ -41,18 +41,14 @@ export default class CommandSanitizer {
     'ls-files',
     'check-ignore',
     'check-attr',
-    '--version',
     'init',
     'config'
   ]);
 
   /**
-   * Flags that are strictly prohibited due to security risks or environment interference.
+   * Global git flags that are strictly prohibited.
    */
-  static PROHIBITED_FLAGS = [
-    '--upload-pack',
-    '--receive-pack',
-    '--ext-cmd',
+  static PROHIBITED_GLOBAL_FLAGS = [
     '--exec-path',
     '--html-path',
     '--man-path',
@@ -60,16 +56,19 @@ export default class CommandSanitizer {
     '--work-tree',
     '--git-dir',
     '--namespace',
-    '--template'
+    '--template',
+    '-c',
+    '--config',
+    '-C'
   ];
 
   /**
-   * Global git flags that are prohibited if they appear before the subcommand.
+   * Command-specific flags that are prohibited due to security risks.
    */
-  static GLOBAL_FLAGS = [
-    '-C',
-    '-c',
-    '--git-dir'
+  static PROHIBITED_COMMAND_FLAGS = [
+    '--upload-pack',
+    '--receive-pack',
+    '--ext-cmd'
   ];
 
   /**
@@ -103,18 +102,23 @@ export default class CommandSanitizer {
       throw new ValidationError('Arguments must be an array', 'CommandSanitizer.sanitize');
     }
 
-    // Simple cache key: joined arguments
-    const cacheKey = args.join('\0');
-    if (this._cache.has(cacheKey)) {
-      return args;
-    }
-
     if (args.length === 0) {
       throw new ValidationError('Arguments array cannot be empty', 'CommandSanitizer.sanitize');
     }
 
+    // Memory-efficient cache key using a short structural signature
+    const cacheKey = `${args[0]}:${args.length}:${args[args.length-1]?.length || 0}:${args.join('').length}`;
+    if (this._cache.has(cacheKey)) {
+      return args;
+    }
+
     if (args.length > CommandSanitizer.MAX_ARGS) {
       throw new ValidationError(`Too many arguments: ${args.length}`, 'CommandSanitizer.sanitize');
+    }
+
+    // Special case: allow exactly ['--version'] as a global flag check
+    if (args.length === 1 && args[0] === '--version') {
+      return args;
     }
 
     // Find the first non-flag argument to identify the subcommand
@@ -130,27 +134,24 @@ export default class CommandSanitizer {
       }
     }
 
-    // Block global flags if they appear before the subcommand
+    // Block global flags anywhere, especially before the subcommand
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
       const lowerArg = arg.toLowerCase();
       
-      // If we haven't reached the subcommand yet, check for prohibited global flags
-      if (subcommandIndex === -1 || i < subcommandIndex) {
-        if (CommandSanitizer.GLOBAL_FLAGS.some(flag => lowerArg === flag.toLowerCase() || lowerArg.startsWith(`${flag.toLowerCase()}=`))) {
-          throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize', { 
-            message: `Global flag "${arg}" is prohibited before the subcommand.` 
-          });
-        }
+      // Prohibit dangerous global flags anywhere
+      if (CommandSanitizer.PROHIBITED_GLOBAL_FLAGS.some(flag => lowerArg === flag || lowerArg.startsWith(`${flag}=`))) {
+        throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize');
+      }
+
+      // Prohibit dangerous command flags
+      if (CommandSanitizer.PROHIBITED_COMMAND_FLAGS.some(flag => lowerArg === flag || lowerArg.startsWith(`${flag}=`))) {
+        throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize');
       }
     }
 
-    // The base command (after global flags) must be in the whitelist
+    // The base command must be in the whitelist
     const commandArg = subcommandIndex !== -1 ? args[subcommandIndex] : args[0];
-    if (typeof commandArg !== 'string') {
-      throw new ValidationError('Command must be a string', 'CommandSanitizer.sanitize', { command: commandArg });
-    }
-    
     const command = commandArg.toLowerCase();
     if (!CommandSanitizer._ALLOWED_COMMANDS.has(command)) {
       throw new ValidationError(`Prohibited git command detected: ${command}`, 'CommandSanitizer.sanitize', { command });
@@ -158,28 +159,9 @@ export default class CommandSanitizer {
 
     let totalLength = 0;
     for (const arg of args) {
-      if (typeof arg !== 'string') {
-        throw new ValidationError('Each argument must be a string', 'CommandSanitizer.sanitize', { arg });
-      }
-
+      totalLength += arg.length;
       if (arg.length > CommandSanitizer.MAX_ARG_LENGTH) {
         throw new ValidationError(`Argument too long: ${arg.length}`, 'CommandSanitizer.sanitize');
-      }
-
-      totalLength += arg.length;
-
-      const lowerArg = arg.toLowerCase();
-
-      // Strengthen configuration flag blocking
-      if (lowerArg === '-c' || lowerArg === '--config' || lowerArg.startsWith('--config=')) {
-        throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize');
-      }
-
-      // Check for other prohibited flags
-      for (const prohibited of CommandSanitizer.PROHIBITED_FLAGS) {
-        if (lowerArg === prohibited || lowerArg.startsWith(`${prohibited}=`)) {
-          throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize');
-        }
       }
     }
 
@@ -187,7 +169,7 @@ export default class CommandSanitizer {
       throw new ValidationError(`Total arguments length too long: ${totalLength}`, 'CommandSanitizer.sanitize');
     }
     
-    // Manage cache size (LRU-ish: delete oldest entry)
+    // Manage cache size
     if (this._cache.size >= this._maxCacheSize) {
       const firstKey = this._cache.keys().next().value;
       this._cache.delete(firstKey);

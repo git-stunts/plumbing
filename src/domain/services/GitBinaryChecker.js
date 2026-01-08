@@ -24,7 +24,8 @@ export default class GitBinaryChecker {
    */
   async check() {
     try {
-      // Check binary availability by calling --version
+      // Check binary availability by calling --version directly.
+      // The sanitizer handles --version as a special case.
       await this.plumbing.execute({ args: ['--version'] });
       return true;
     } catch (err) {

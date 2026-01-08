@@ -100,7 +100,7 @@ export default class GitCommandBuilder {
   }
 
   /**
-   * Adds the -p flag (parent) - Note: shared with pretty-print in some commands
+   * Adds the -p flag (parent)
    * @param {string} sha
    * @returns {GitCommandBuilder}
    */

@@ -92,6 +92,7 @@ export default class GitPersistenceService {
       throw new InvalidArgumentError('Expected instance of GitCommit', 'GitPersistenceService.writeCommit');
     }
 
+    // Git commit-tree syntax: git commit-tree <tree> [(-p <parent>)...]
     const builder = GitCommandBuilder.commitTree()
       .arg(commit.treeSha.toString());
 
@@ -99,11 +100,10 @@ export default class GitPersistenceService {
       builder.parent(parent.toString());
     }
 
-    builder.message(commit.message);
-
     const args = builder.build();
 
     // Ensure environment is filtered through policy
+    // Git expects date format: "timestamp offset" (e.g. "1609459200 +0000")
     const env = EnvironmentPolicy.filter({
       GIT_AUTHOR_NAME: commit.author.name,
       GIT_AUTHOR_EMAIL: commit.author.email,
@@ -113,7 +113,11 @@ export default class GitPersistenceService {
       GIT_COMMITTER_DATE: `${commit.committer.timestamp} +0000`
     });
     
-    const shaStr = await this.plumbing.execute({ args, env });
+    const shaStr = await this.plumbing.execute({
+      args,
+      env,
+      input: commit.message + '\n'
+    });
 
     return GitSha.from(shaStr.trim());
   }

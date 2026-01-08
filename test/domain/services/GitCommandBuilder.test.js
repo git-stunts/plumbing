@@ -19,7 +19,7 @@ describe('GitCommandBuilder', () => {
     expect(args).toEqual(['cat-file', '-p', 'HEAD']);
   });
 
-  it('builds a commit-tree command with message and parents', () => {
+  it('builds a commit-tree command with tree SHA and parents', () => {
     const treeSha = 'a'.repeat(40);
     const parent1 = 'b'.repeat(40);
     const parent2 = 'c'.repeat(40);
@@ -28,15 +28,13 @@ describe('GitCommandBuilder', () => {
       .arg(treeSha)
       .parent(parent1)
       .parent(parent2)
-      .message('Initial commit')
       .build();
     
     expect(args).toEqual([
       'commit-tree', 
       treeSha, 
       '-p', parent1, 
-      '-p', parent2, 
-      '-m', 'Initial commit'
+      '-p', parent2
     ]);
   });
 
