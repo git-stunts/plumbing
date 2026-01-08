@@ -1,29 +1,30 @@
 {
   "name": "@git-stunts/plumbing",
   "version": "2.7.0",
-  "description": "Git Stunts Lego Block: plumbing",
+  "description": "Robust async, stream-first Git plumbing for Node, Bun, and Deno.",
   "type": "module",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
     "./ShellRunner": "./ShellRunner.js",
-    "./sha": "./src/domain/value-objects/GitSha.js",
-    "./ref": "./src/domain/value-objects/GitRef.js",
-    "./mode": "./src/domain/value-objects/GitFileMode.js",
-    "./signature": "./src/domain/value-objects/GitSignature.js",
-    "./errors": "./src/domain/errors/GitPlumbingError.js"
+    "./sha": "./sha.js",
+    "./ref": "./ref.js",
+    "./mode": "./mode.js",
+    "./signature": "./signature.js",
+    "./errors": "./errors.js"
   },
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=20.0.0",
     "bun": ">=1.3.5",
     "deno": ">=2.0.0"
   },
   "scripts": {
     "test": "./scripts/run-multi-runtime-tests.sh",
     "test:local": "vitest run --globals",
-    "prepare": "test -d .git && git config core.hooksPath scripts || true",
+    "prepare": "test -d .git || true",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "hooks:install": "git config core.hooksPath scripts"
   },
   "author": "James Ross <james@flyingrobots.dev>",
   "license": "Apache-2.0",
@@ -35,5 +36,23 @@
     "eslint": "^9.17.0",
     "prettier": "^3.4.2",
     "vitest": "^3.0.0"
-  }
+  },
+  "files": [
+    "src",
+    "index.js",
+    "ShellRunner.js",
+    "sha.js",
+    "ref.js",
+    "mode.js",
+    "signature.js",
+    "errors.js",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "SECURITY.md"
+  ],
+  "repository": { "type": "git", "url": "git+https://github.com/git-stunts/plumbing.git" },
+  "homepage": "https://github.com/git-stunts/plumbing#readme",
+  "bugs": { "url": "https://github.com/git-stunts/plumbing/issues" },
+  "keywords": ["git", "plumbing", "content-addressable", "dag", "merkle", "node", "deno", "bun"]
 }
