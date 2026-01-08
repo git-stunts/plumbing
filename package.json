@@ -24,8 +24,7 @@
     "prepare": "test -d .git || true",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "hooks:install": "git config core.hooksPath scripts",
-    "pretest": "[ \"$GIT_STUNTS_DOCKER\" = \"1\" ] || (echo '🚫 RUN IN DOCKER ONLY' && exit 1)"
+    "hooks:install": "git config core.hooksPath scripts"
   },
   "author": "James Ross <james@flyingrobots.dev>",
   "license": "Apache-2.0",
