@@ -53,17 +53,19 @@ const commitSha = await git.commit({
 
 ### Custom Runners
 
-Extend the library for exotic environments like SSH or WASM.
+Extend the library for exotic environments like SSH or WASM by registering a custom runner class.
 
 ```javascript
 import GitPlumbing, { ShellRunnerFactory } from '@git-stunts/plumbing';
 
 class MySshRunner {
-  async run({ command, args }) { /* custom implementation */ }
+  async run({ command, args, cwd, input, timeout, env }) { 
+    /* custom implementation returning { stdoutStream, exitPromise } */ 
+  }
 }
 
+// Register and use
 ShellRunnerFactory.register('ssh', MySshRunner);
-
 const git = GitPlumbing.createDefault({ env: 'ssh' });
 ```
 

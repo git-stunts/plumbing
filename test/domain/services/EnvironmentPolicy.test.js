@@ -19,6 +19,18 @@ describe('EnvironmentPolicy', () => {
     expect(filtered.DANGEROUS_VAR).toBeUndefined();
   });
 
+  it('explicitly blocks GIT_CONFIG_PARAMETERS', () => {
+    const env = {
+      GIT_AUTHOR_NAME: 'James Ross',
+      GIT_CONFIG_PARAMETERS: "'user.name=attacker'"
+    };
+
+    const filtered = EnvironmentPolicy.filter(env);
+
+    expect(filtered.GIT_AUTHOR_NAME).toBe('James Ross');
+    expect(filtered.GIT_CONFIG_PARAMETERS).toBeUndefined();
+  });
+
   it('includes all requested identity and localization variables', () => {
     const env = {
       GIT_AUTHOR_NAME: 'name',

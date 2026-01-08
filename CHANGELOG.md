@@ -9,13 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Refactor
 - **Core Infrastructure for Production Stability**: Massive overhaul of the streaming and validation layers to support high-concurrency production workloads.
+- **Security Layer & Service Decoupling**: Implemented strict environment and command isolation.
 
 ### Changed
-- **GitStream Resource Management**: Replaced `FinalizationRegistry` with manual `try...finally` cleanup patterns. This prevents `EMFILE` (too many open files) errors that can occur under heavy load when garbage collection is not fast enough to release file handles.
-- **GitStream Performance**: Updated `collect()` to check if a chunk is already a `Uint8Array`, avoiding redundant encoding operations.
-- **GitSha API Consolidation**: Removed `isValid`, `fromString`, and `fromStringOrNull`. All SHA-1 validation is now consolidated into a single static `GitSha.from(sha)` method.
-- **Enhanced Validation**: `GitSha.from` now catches Zod errors and throws a human-readable `ValidationError` including a help URL for Git object internals.
-- **ByteMeasurer Optimization**: Optimized for Node.js, Bun, and Deno runtimes. Uses native `Buffer.byteLength` where available and shared `TextEncoder` instances elsewhere to minimize GC pressure.
+- **GitStream Resource Management**: Replaced `FinalizationRegistry` with manual `try...finally` cleanup patterns.
+- **GitStream Performance**: Updated `collect()` to check if a chunk is already a `Uint8Array`.
+- **GitSha API Consolidation**: Removed `isValid`, `fromString`, and `fromStringOrNull`. Consolidated into `GitSha.from(sha)`.
+- **Enhanced Validation**: `GitSha.from` now throws `ValidationError` with help URLs.
+- **ByteMeasurer Optimization**: Optimized for Node.js, Bun, and Deno runtimes.
+- **CommandSanitizer Enhancement**: Converted to an injectable instance with an internal cache for repetitive commands. Now blocks global flags like `-C`, `-c`, and `--git-dir` if they appear before the subcommand.
+- **EnvironmentPolicy Hardening**: Whitelists only essential variables (`GIT_AUTHOR_*`, `GIT_COMMITTER_*`, `LANG`, `LC_ALL`) and explicitly blocks `GIT_CONFIG_PARAMETERS`.
+- **ShellRunnerFactory Decoupling**: Added `ShellRunnerFactory.register(name, RunnerClass)` to allow custom adapter registration (e.g., SSH, WASM) without modifying core library code.
 - **Tooling**: Upgraded `vitest` to `^3.0.0` and updated `package.json` to version `2.0.0`.
 
 ### Added

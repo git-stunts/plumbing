@@ -6,7 +6,9 @@ import ValidationError from '../errors/ValidationError.js';
 import ProhibitedFlagError from '../errors/ProhibitedFlagError.js';
 
 /**
- * Sanitizes and validates git command arguments
+ * Sanitizes and validates git command arguments.
+ * Implements a defense-in-depth strategy by whitelisting commands,
+ * blocking dangerous flags, and preventing global flag escapes.
  */
 export default class CommandSanitizer {
   static MAX_ARGS = 1000;
@@ -15,7 +17,6 @@ export default class CommandSanitizer {
 
   /**
    * Comprehensive whitelist of allowed git plumbing and essential porcelain commands.
-   * Using a Set for efficient lookups and dynamic registration.
    * @private
    */
   static _ALLOWED_COMMANDS = new Set([
@@ -63,11 +64,20 @@ export default class CommandSanitizer {
   ];
 
   /**
+   * Global git flags that are prohibited if they appear before the subcommand.
+   */
+  static GLOBAL_FLAGS = [
+    '-C',
+    '-c',
+    '--git-dir'
+  ];
+
+  /**
    * Dynamically allows a command.
    * @param {string} commandName
    */
   static allow(commandName) {
-    this._ALLOWED_COMMANDS.add(commandName.toLowerCase());
+    CommandSanitizer._ALLOWED_COMMANDS.add(commandName.toLowerCase());
   }
 
   /**
@@ -107,10 +117,35 @@ export default class CommandSanitizer {
       throw new ValidationError(`Too many arguments: ${args.length}`, 'CommandSanitizer.sanitize');
     }
 
-    // Check if the base command is allowed
-    const command = args[0].toLowerCase();
+    // Find the first non-flag argument to identify the subcommand
+    let subcommandIndex = -1;
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (!arg.startsWith('-')) {
+        subcommandIndex = i;
+        break;
+      }
+    }
+
+    // Block global flags if they appear before the subcommand
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      const lowerArg = arg.toLowerCase();
+      
+      // If we haven't reached the subcommand yet, check for prohibited global flags
+      if (subcommandIndex === -1 || i < subcommandIndex) {
+        if (CommandSanitizer.GLOBAL_FLAGS.some(flag => lowerArg === flag.toLowerCase() || lowerArg.startsWith(`${flag.toLowerCase()}=`))) {
+          throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize', { 
+            message: `Global flag "${arg}" is prohibited before the subcommand.` 
+          });
+        }
+      }
+    }
+
+    // The base command (after global flags) must be in the whitelist
+    const command = (subcommandIndex !== -1 ? args[subcommandIndex] : args[0]).toLowerCase();
     if (!CommandSanitizer._ALLOWED_COMMANDS.has(command)) {
-      throw new ValidationError(`Prohibited git command detected: ${args[0]}`, 'CommandSanitizer.sanitize', { command: args[0] });
+      throw new ValidationError(`Prohibited git command detected: ${command}`, 'CommandSanitizer.sanitize', { command });
     }
 
     let totalLength = 0;
@@ -127,7 +162,7 @@ export default class CommandSanitizer {
 
       const lowerArg = arg.toLowerCase();
 
-      // Strengthen configuration flag blocking: Block -c or --config anywhere
+      // Strengthen configuration flag blocking
       if (lowerArg === '-c' || lowerArg === '--config' || lowerArg.startsWith('--config=')) {
         throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize');
       }
