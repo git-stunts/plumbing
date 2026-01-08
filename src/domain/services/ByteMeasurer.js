@@ -12,25 +12,40 @@ export default class ByteMeasurer {
   /**
    * Measures the byte length of a string or binary content.
    * Optimized for Node.js and other runtimes.
-   * @param {string|Uint8Array} content
+   * @param {string|Uint8Array|ArrayBuffer|SharedArrayBuffer|{length: number}} content
    * @returns {number}
+   * @throws {TypeError} If the content type is unsupported.
    */
   static measure(content) {
+    if (content === null || content === undefined) {
+      throw new TypeError('Content cannot be null or undefined');
+    }
+
+    if (typeof content === 'string') {
+      // Node.js / Bun optimization - fastest way to get UTF-8 byte length without allocation
+      if (typeof Buffer !== 'undefined' && typeof Buffer.byteLength === 'function') {
+        return Buffer.byteLength(content, 'utf8');
+      }
+      // Fallback for Deno / Browser
+      return ENCODER.encode(content).length;
+    }
+
     if (content instanceof Uint8Array) {
       return content.length;
     }
 
-    if (typeof content !== 'string') {
-      return 0;
+    if (content instanceof ArrayBuffer || (typeof SharedArrayBuffer !== 'undefined' && content instanceof SharedArrayBuffer)) {
+      return content.byteLength;
     }
 
-    // Node.js / Bun optimization - fastest way to get UTF-8 byte length without allocation
-    if (typeof Buffer !== 'undefined' && typeof Buffer.byteLength === 'function') {
-      return Buffer.byteLength(content, 'utf8');
+    if (ArrayBuffer.isView(content)) {
+      return content.byteLength;
     }
 
-    // Fallback for Deno / Browser - TextEncoder is the standard native utility
-    // We reuse a single ENCODER instance to avoid GC pressure
-    return ENCODER.encode(content).length;
+    if (typeof content === 'object' && typeof content.length === 'number' && Number.isFinite(content.length)) {
+      return content.length;
+    }
+
+    throw new TypeError(`Unsupported content type for ByteMeasurer.measure: ${typeof content}`);
   }
 }
