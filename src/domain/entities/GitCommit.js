@@ -27,34 +27,24 @@ export default class GitCommit {
    */
   constructor({ sha, treeSha, parents = [], author, committer, message }) {
     if (sha !== null && !(sha instanceof GitSha)) {
-      throw new ValidationError('SHA must be a GitSha instance or null', 'GitCommit.constructor');
+      this.sha = sha ? GitSha.from(sha) : null;
+    } else {
+      this.sha = sha;
     }
-    if (!(treeSha instanceof GitSha)) {
-      throw new ValidationError('treeSha must be a GitSha instance', 'GitCommit.constructor');
-    }
+
+    this.treeSha = treeSha instanceof GitSha ? treeSha : GitSha.from(treeSha);
+    
     if (!Array.isArray(parents)) {
       throw new ValidationError('parents must be an array of GitSha', 'GitCommit.constructor');
     }
-    for (const parent of parents) {
-      if (!(parent instanceof GitSha)) {
-        throw new ValidationError('parents must be an array of GitSha', 'GitCommit.constructor');
-      }
-    }
-    if (!(author instanceof GitSignature)) {
-      throw new ValidationError('author must be a GitSignature instance', 'GitCommit.constructor');
-    }
-    if (!(committer instanceof GitSignature)) {
-      throw new ValidationError('committer must be a GitSignature instance', 'GitCommit.constructor');
-    }
+    this.parents = parents.map(p => (p instanceof GitSha ? p : GitSha.from(p)));
+
+    this.author = author instanceof GitSignature ? author : new GitSignature(author);
+    this.committer = committer instanceof GitSignature ? committer : new GitSignature(committer);
+
     if (typeof message !== 'string') {
       throw new ValidationError('message must be a string', 'GitCommit.constructor');
     }
-
-    this.sha = sha;
-    this.treeSha = treeSha;
-    this.parents = [...parents];
-    this.author = author;
-    this.committer = committer;
     this.message = message;
   }
 
