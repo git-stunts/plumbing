@@ -34,7 +34,7 @@ describe('ExecutionOrchestrator', () => {
     
     const policy = new CommandRetryPolicy({
       maxAttempts: 3,
-      initialDelayMs: 500, // Long delay
+      initialDelayMs: 500, // Delay for 2nd retry
       totalTimeout: 600    // Short total timeout
     });
 
@@ -58,7 +58,11 @@ describe('ExecutionOrchestrator', () => {
     } catch (err) {
       error = err;
     }
+
     expect(error).toBeInstanceOf(GitRepositoryLockedError);
-    expect(attempts).toBe(1); // Should have stopped after 1st attempt because 500ms backoff would exceed 600ms total
+    // With getDelay(attempt):
+    // Attempt 1 fails. backoff = getDelay(1) = 0. 0 < 600. Proceeds to Attempt 2.
+    // Attempt 2 fails. backoff = getDelay(2) = 500. elapsed + 500 > 600. Aborts.
+    expect(attempts).toBe(2);
   });
 });

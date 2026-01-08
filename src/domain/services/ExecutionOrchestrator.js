@@ -58,7 +58,7 @@ export default class ExecutionOrchestrator {
           });
 
           if (this.classifier.isRetryable(error) && attempt < retryPolicy.maxAttempts) {
-            const backoff = retryPolicy.getDelay(attempt + 1);
+            const backoff = retryPolicy.getDelay(attempt);
             
             // Re-check if we have time for backoff + next attempt
             if (retryPolicy.totalTimeout && (performance.now() - operationStartTime + backoff) > retryPolicy.totalTimeout) {
@@ -85,6 +85,13 @@ export default class ExecutionOrchestrator {
         });
       }
     }
+
+    throw new GitPlumbingError('All retry attempts exhausted', 'ExecutionOrchestrator.orchestrate', {
+      args,
+      traceId,
+      attempt,
+      retryPolicy
+    });
   }
 
   /**
