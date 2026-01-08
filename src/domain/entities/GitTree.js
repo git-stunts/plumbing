@@ -17,23 +17,26 @@ import { GitTreeSchema } from '../schemas/GitTreeSchema.js';
  */
 export default class GitTree {
   /**
-   * @param {GitSha|null} sha - The tree SHA
-   * @param {GitTreeEntry[]} entries - Array of GitTreeEntry instances
+   * @param {GitSha|string|null} sha - The tree SHA
+   * @param {GitTreeEntry[]|Object[]} entries - Array of entries
    */
   constructor(sha = null, entries = []) {
-    if (sha !== null && !(sha instanceof GitSha)) {
-      throw new ValidationError('SHA must be a GitSha instance or null', 'GitTree.constructor');
-    }
-    
-    // Enforce that entries are GitTreeEntry instances
-    this._entries = entries.map(entry => {
-      if (!(entry instanceof GitTreeEntry)) {
-        throw new ValidationError('All entries must be GitTreeEntry instances', 'GitTree.constructor');
-      }
-      return entry;
-    });
+    const data = {
+      sha: sha instanceof GitSha ? sha.toString() : sha,
+      entries: entries.map(e => (e instanceof GitTreeEntry ? e.toJSON() : e))
+    };
 
-    this.sha = sha;
+    const result = GitTreeSchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid tree data: ${result.error.errors[0].message}`,
+        'GitTree.constructor',
+        { data, errors: result.error.errors }
+      );
+    }
+
+    this.sha = sha instanceof GitSha ? sha : (result.data.sha ? GitSha.from(result.data.sha) : null);
+    this._entries = entries.map((e, i) => (e instanceof GitTreeEntry ? e : new GitTreeEntry(result.data.entries[i])));
   }
 
   /**

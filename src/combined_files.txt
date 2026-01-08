@@ -1,0 +1,3140 @@
+# /Users/james/git/git-stunts/plumbing/src/domain/entities/GitBlob.js
+/**
+ * @fileoverview GitBlob entity - represents a Git blob object
+ */
+
+import GitSha from '../value-objects/GitSha.js';
+import GitObjectType from '../value-objects/GitObjectType.js';
+import ByteMeasurer from '../services/ByteMeasurer.js';
+import ValidationError from '../errors/ValidationError.js';
+import { GitBlobSchema } from '../schemas/GitBlobSchema.js';
+
+/**
+ * Represents a Git blob object
+ */
+export default class GitBlob {
+  /**
+   * @param {GitSha|string|null} sha
+   * @param {string|Uint8Array} content
+   */
+  constructor(sha, content) {
+    const data = {
+      sha: sha instanceof GitSha ? sha.toString() : sha,
+      content
+    };
+
+    const result = GitBlobSchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid blob: ${result.error.errors[0].message}`,
+        'GitBlob.constructor',
+        { data, errors: result.error.errors }
+      );
+    }
+
+    this.sha = sha instanceof GitSha ? sha : (result.data.sha ? GitSha.from(result.data.sha) : null);
+    this._content = result.data.content instanceof Uint8Array ? new Uint8Array(result.data.content) : result.data.content;
+  }
+
+  /**
+   * Returns the blob content
+   * @returns {string|Uint8Array}
+   */
+  get content() {
+    return this._content instanceof Uint8Array ? new Uint8Array(this._content) : this._content;
+  }
+
+  /**
+   * Creates a GitBlob from content
+   * @param {string|Uint8Array} content
+   * @returns {GitBlob}
+   */
+  static fromContent(content) {
+    return new GitBlob(null, content);
+  }
+
+  /**
+   * Checks if the blob has been written to the repository
+   * @returns {boolean}
+   */
+  isWritten() {
+    return this.sha !== null;
+  }
+
+  /**
+   * Returns the content size in bytes
+   * @returns {number}
+   */
+  size() {
+    return ByteMeasurer.measure(this.content);
+  }
+
+  /**
+   * Returns the blob type
+   * @returns {GitObjectType}
+   */
+  type() {
+    return GitObjectType.blob();
+  }
+
+  /**
+   * Returns a JSON representation of the blob
+   * @returns {Object}
+   */
+  toJSON() {
+    return {
+      sha: this.sha ? this.sha.toString() : null,
+      content: this._content instanceof Uint8Array ? Array.from(this._content) : this._content
+    };
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/entities/GitCommit.js
+/**
+ * @fileoverview GitCommit entity - represents a Git commit object
+ */
+
+import GitSha from '../value-objects/GitSha.js';
+import GitSignature from '../value-objects/GitSignature.js';
+import GitObjectType from '../value-objects/GitObjectType.js';
+import ValidationError from '../errors/ValidationError.js';
+import { GitCommitSchema } from '../schemas/GitCommitSchema.js';
+
+/**
+ * @typedef {import('../schemas/GitCommitSchema.js').GitCommit} GitCommitData
+ */
+
+/**
+ * Represents a Git commit object
+ */
+export default class GitCommit {
+  /**
+   * @param {Object} options
+   * @param {GitSha|null} options.sha
+   * @param {GitSha} options.treeSha
+   * @param {GitSha[]} options.parents
+   * @param {GitSignature} options.author
+   * @param {GitSignature} options.committer
+   * @param {string} options.message
+   */
+  constructor({ sha, treeSha, parents = [], author, committer, message }) {
+    if (sha !== null && !(sha instanceof GitSha)) {
+      this.sha = sha ? GitSha.from(sha) : null;
+    } else {
+      this.sha = sha;
+    }
+
+    this.treeSha = treeSha instanceof GitSha ? treeSha : GitSha.from(treeSha);
+    
+    if (!Array.isArray(parents)) {
+      throw new ValidationError('parents must be an array of GitSha', 'GitCommit.constructor');
+    }
+    this.parents = parents.map(p => (p instanceof GitSha ? p : GitSha.from(p)));
+
+    this.author = author instanceof GitSignature ? author : new GitSignature(author);
+    this.committer = committer instanceof GitSignature ? committer : new GitSignature(committer);
+
+    if (typeof message !== 'string') {
+      throw new ValidationError('message must be a string', 'GitCommit.constructor');
+    }
+    this.message = message;
+  }
+
+  /**
+   * Factory method to create a GitCommit from raw data with validation.
+   * @param {GitCommitData} data
+   * @returns {GitCommit}
+   */
+  static fromData(data) {
+    const result = GitCommitSchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid commit data: ${result.error.errors[0].message}`,
+        'GitCommit.fromData',
+        { data, errors: result.error.errors }
+      );
+    }
+
+    return new GitCommit({
+      sha: result.data.sha ? GitSha.from(result.data.sha) : null,
+      treeSha: GitSha.from(result.data.treeSha),
+      parents: result.data.parents.map(p => GitSha.from(p)),
+      author: new GitSignature(result.data.author),
+      committer: new GitSignature(result.data.committer),
+      message: result.data.message
+    });
+  }
+
+  /**
+   * Checks if the commit has been written to the repository
+   * @returns {boolean}
+   */
+  isWritten() {
+    return this.sha !== null;
+  }
+
+  /**
+   * Returns the commit type
+   * @returns {GitObjectType}
+   */
+  type() {
+    return GitObjectType.commit();
+  }
+
+  /**
+   * Returns if this is a root commit (no parents)
+   * @returns {boolean}
+   */
+  isRoot() {
+    return this.parents.length === 0;
+  }
+
+  /**
+   * Returns if this is a merge commit (multiple parents)
+   * @returns {boolean}
+   */
+  isMerge() {
+    return this.parents.length > 1;
+  }
+
+  /**
+   * Returns a JSON representation of the commit
+   * @returns {GitCommitData}
+   */
+  toJSON() {
+    return {
+      sha: this.sha ? this.sha.toString() : null,
+      treeSha: this.treeSha.toString(),
+      parents: this.parents.map(p => p.toString()),
+      author: this.author.toJSON(),
+      committer: this.committer.toJSON(),
+      message: this.message
+    };
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/entities/GitCommitBuilder.js
+/**
+ * @fileoverview GitCommitBuilder entity - provides a fluent API for commit construction
+ */
+
+import GitCommit from './GitCommit.js';
+import GitSha from '../value-objects/GitSha.js';
+import GitSignature from '../value-objects/GitSignature.js';
+
+/**
+ * Fluent builder for creating GitCommit instances
+ */
+export default class GitCommitBuilder {
+  constructor() {
+    this._sha = null;
+    this._treeSha = null;
+    this._parents = [];
+    this._author = null;
+    this._committer = null;
+    this._message = '';
+  }
+
+  /**
+   * Sets the commit SHA
+   * @param {GitSha|string|null} sha
+   * @returns {GitCommitBuilder}
+   */
+  sha(sha) {
+    if (sha === null) {
+      this._sha = null;
+      return this;
+    }
+    this._sha = sha instanceof GitSha ? sha : GitSha.from(sha);
+    return this;
+  }
+
+  /**
+   * Sets the tree SHA
+   * @param {GitSha|string|{sha: GitSha|string}} tree
+   * @returns {GitCommitBuilder}
+   */
+  tree(tree) {
+    if (tree && typeof tree === 'object' && 'sha' in tree) {
+      this._treeSha = tree.sha instanceof GitSha ? tree.sha : GitSha.from(tree.sha);
+    } else {
+      this._treeSha = tree instanceof GitSha ? tree : GitSha.from(tree);
+    }
+    return this;
+  }
+
+  /**
+   * Adds a parent commit SHA
+   * @param {GitSha|string} parentSha
+   * @returns {GitCommitBuilder}
+   */
+  parent(parentSha) {
+    const sha = parentSha instanceof GitSha ? parentSha : GitSha.from(parentSha);
+    this._parents.push(sha);
+    return this;
+  }
+
+  /**
+   * Sets the parents array
+   * @param {GitSha[]|string[]} parents
+   * @returns {GitCommitBuilder}
+   */
+  parents(parents) {
+    this._parents = parents.map(p => (p instanceof GitSha ? p : GitSha.from(p)));
+    return this;
+  }
+
+  /**
+   * Sets the author
+   * @param {GitSignature|Object} author
+   * @returns {GitCommitBuilder}
+   */
+  author(author) {
+    this._author = author instanceof GitSignature ? author : new GitSignature(author);
+    return this;
+  }
+
+  /**
+   * Sets the committer
+   * @param {GitSignature|Object} committer
+   * @returns {GitCommitBuilder}
+   */
+  committer(committer) {
+    this._committer = committer instanceof GitSignature ? committer : new GitSignature(committer);
+    return this;
+  }
+
+  /**
+   * Sets the commit message
+   * @param {string} message
+   * @returns {GitCommitBuilder}
+   */
+  message(message) {
+    this._message = String(message);
+    return this;
+  }
+
+  /**
+   * Builds the GitCommit
+   * @returns {GitCommit}
+   */
+  build() {
+    return new GitCommit({
+      sha: this._sha,
+      treeSha: this._treeSha,
+      parents: this._parents,
+      author: this._author,
+      committer: this._committer,
+      message: this._message
+    });
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/entities/GitTree.js
+/**
+ * @fileoverview GitTree entity - represents a Git tree object
+ */
+
+import GitSha from '../value-objects/GitSha.js';
+import GitObjectType from '../value-objects/GitObjectType.js';
+import GitTreeEntry from './GitTreeEntry.js';
+import ValidationError from '../errors/ValidationError.js';
+import { GitTreeSchema } from '../schemas/GitTreeSchema.js';
+
+/**
+ * @typedef {import('../schemas/GitTreeSchema.js').GitTree} GitTreeData
+ */
+
+/**
+ * Represents a Git tree object
+ */
+export default class GitTree {
+  /**
+   * @param {GitSha|null} sha - The tree SHA
+   * @param {GitTreeEntry[]} entries - Array of GitTreeEntry instances
+   */
+  constructor(sha = null, entries = []) {
+    if (sha !== null && !(sha instanceof GitSha)) {
+      throw new ValidationError('SHA must be a GitSha instance or null', 'GitTree.constructor');
+    }
+    
+    // Enforce that entries are GitTreeEntry instances
+    this._entries = entries.map(entry => {
+      if (!(entry instanceof GitTreeEntry)) {
+        throw new ValidationError('All entries must be GitTreeEntry instances', 'GitTree.constructor');
+      }
+      return entry;
+    });
+
+    this.sha = sha;
+  }
+
+  /**
+   * Factory method to create a GitTree from raw data with validation.
+   * @param {GitTreeData} data
+   * @returns {GitTree}
+   */
+  static fromData(data) {
+    const result = GitTreeSchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid tree data: ${result.error.errors[0].message}`,
+        'GitTree.fromData',
+        { data, errors: result.error.errors }
+      );
+    }
+
+    const sha = result.data.sha ? GitSha.from(result.data.sha) : null;
+    const entries = result.data.entries.map(e => new GitTreeEntry(e));
+    return new GitTree(sha, entries);
+  }
+
+  /**
+   * Returns a copy of the tree entries
+   * @returns {GitTreeEntry[]}
+   */
+  get entries() {
+    return [...this._entries];
+  }
+
+  /**
+   * Creates an empty GitTree
+   * @returns {GitTree}
+   */
+  static empty() {
+    return new GitTree(GitSha.EMPTY_TREE, []);
+  }
+
+  /**
+   * Adds an entry to the tree
+   * @param {GitTreeEntry} entry
+   * @returns {GitTree}
+   */
+  addEntry(entry) {
+    if (!(entry instanceof GitTreeEntry)) {
+      throw new ValidationError('Entry must be a GitTreeEntry instance', 'GitTree.addEntry', { entry });
+    }
+    return new GitTree(this.sha, [...this._entries, entry]);
+  }
+
+  /**
+   * Serializes the tree entries into the format expected by `git mktree`.
+   * Format: <mode> <type> <sha>\t<path>
+   * @returns {string}
+   */
+  toMktreeFormat() {
+    return this._entries
+      .map(entry => {
+        const type = entry.isTree() ? 'tree' : 'blob';
+        return `${entry.mode} ${type} ${entry.sha}\t${entry.path}`;
+      })
+      .join('\n') + '\n';
+  }
+
+  /**
+   * Checks if the tree has been written to the repository
+   * @returns {boolean}
+   */
+  isWritten() {
+    return this.sha !== null;
+  }
+
+  /**
+   * Returns the tree type
+   * @returns {GitObjectType}
+   */
+  type() {
+    return GitObjectType.tree();
+  }
+
+  /**
+   * Returns a JSON representation of the tree
+   * @returns {GitTreeData}
+   */
+  toJSON() {
+    return {
+      sha: this.sha ? this.sha.toString() : null,
+      entries: this._entries.map(e => e.toJSON())
+    };
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/entities/GitTreeBuilder.js
+/**
+ * @fileoverview GitTreeBuilder entity - provides efficient O(N) tree construction
+ */
+
+import GitTree from './GitTree.js';
+import GitTreeEntry from './GitTreeEntry.js';
+import ValidationError from '../errors/ValidationError.js';
+
+/**
+ * Fluent builder for creating GitTree instances efficiently
+ */
+export default class GitTreeBuilder {
+  constructor() {
+    this._entries = [];
+  }
+
+  /**
+   * Adds an entry to the builder
+   * @param {GitTreeEntry} entry
+   * @returns {GitTreeBuilder}
+   */
+  addEntry(entry) {
+    if (!(entry instanceof GitTreeEntry)) {
+      throw new ValidationError('Entry must be a GitTreeEntry instance', 'GitTreeBuilder.addEntry', { entry });
+    }
+    this._entries.push(entry);
+    return this;
+  }
+
+  /**
+   * Convenience method to add an entry from primitives
+   * @param {Object} options
+   * @param {string} options.path
+   * @param {GitSha|string} options.sha
+   * @param {GitFileMode|string} options.mode
+   * @returns {GitTreeBuilder}
+   */
+  add({ path, sha, mode }) {
+    return this.addEntry(new GitTreeEntry({ mode, sha, path }));
+  }
+
+  /**
+   * Builds the GitTree
+   * @returns {GitTree}
+   */
+  build() {
+    return new GitTree(null, [...this._entries]);
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/entities/GitTreeEntry.js
+/**
+ * @fileoverview GitTreeEntry entity - represents an entry in a Git tree
+ */
+
+import GitSha from '../value-objects/GitSha.js';
+import GitFileMode from '../value-objects/GitFileMode.js';
+import ValidationError from '../errors/ValidationError.js';
+import { GitTreeEntrySchema } from '../schemas/GitTreeEntrySchema.js';
+
+/**
+ * @typedef {import('../schemas/GitTreeEntrySchema.js').GitTreeEntry} GitTreeEntryData
+ */
+
+/**
+ * Represents an entry in a Git tree
+ */
+export default class GitTreeEntry {
+  /**
+   * @param {Object} options
+   * @param {GitFileMode|string} options.mode - File mode
+   * @param {GitSha|string} options.sha - Object SHA
+   * @param {string} options.path - File path
+   */
+  constructor({ mode, sha, path }) {
+    const data = {
+      mode: mode instanceof GitFileMode ? mode.toString() : mode,
+      sha: sha instanceof GitSha ? sha.toString() : sha,
+      path
+    };
+
+    const result = GitTreeEntrySchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid tree entry: ${result.error.errors[0].message}`,
+        'GitTreeEntry.constructor',
+        { data, errors: result.error.errors }
+      );
+    }
+
+    this.mode = mode instanceof GitFileMode ? mode : new GitFileMode(result.data.mode);
+    this.sha = sha instanceof GitSha ? sha : GitSha.from(result.data.sha);
+    this.path = result.data.path;
+  }
+
+  /**
+   * Returns the object type
+   * @returns {import('../value-objects/GitObjectType.js').default}
+   */
+  type() {
+    return this.mode.getObjectType();
+  }
+
+  /**
+   * Returns if the entry is a directory (tree)
+   * @returns {boolean}
+   */
+  isTree() {
+    return this.mode.isTree();
+  }
+
+  /**
+   * Returns if the entry is a blob
+   * @returns {boolean}
+   */
+  isBlob() {
+    return this.type().isBlob();
+  }
+
+  /**
+   * Returns a JSON representation of the entry
+   * @returns {GitTreeEntryData}
+   */
+  toJSON() {
+    return {
+      mode: this.mode.toString(),
+      sha: this.sha.toString(),
+      path: this.path
+    };
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/errors/GitPlumbingError.js
+/**
+ * @fileoverview Custom error types for Git plumbing operations
+ */
+
+/**
+ * Base error for Git operations
+ */
+export default class GitPlumbingError extends Error {
+  constructor(message, operation, details = {}) {
+    super(message);
+    this.name = 'GitPlumbingError';
+    this.operation = operation;
+    this.details = details;
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/errors/GitRepositoryLockedError.js
+/**
+ * @fileoverview GitRepositoryLockedError - Thrown when a git lock file exists
+ */
+
+import GitPlumbingError from './GitPlumbingError.js';
+
+/**
+ * Error thrown when a Git operation fails because the repository is locked.
+ */
+export default class GitRepositoryLockedError extends GitPlumbingError {
+  /**
+   * @param {string} message
+   * @param {string} operation
+   * @param {Object} [details={}]
+   */
+  constructor(message, operation, details = {}) {
+    super(message, operation, {
+      ...details,
+      code: 'GIT_REPOSITORY_LOCKED',
+      remediation: 'Another git process is running. If no other process is active, delete .git/index.lock to proceed.',
+      documentation: 'https://github.com/git-stunts/plumbing/blob/main/docs/RECIPES.md#handling-repository-locks'
+    });
+    this.name = 'GitRepositoryLockedError';
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/errors/InvalidArgumentError.js
+/**
+ * @fileoverview Custom error for invalid arguments
+ */
+
+import GitPlumbingError from './GitPlumbingError.js';
+
+/**
+ * Error thrown when an argument passed to a function is invalid
+ */
+export default class InvalidArgumentError extends GitPlumbingError {
+  /**
+   * @param {string} message
+   * @param {string} operation
+   * @param {Object} [details={}]
+   */
+  constructor(message, operation, details = {}) {
+    super(message, operation, details);
+    this.name = 'InvalidArgumentError';
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/errors/InvalidGitObjectTypeError.js
+/**
+ * @fileoverview Custom error types for Git plumbing operations
+ */
+
+import GitPlumbingError from './GitPlumbingError.js';
+
+/**
+ * Error thrown when Git object type validation fails
+ */
+export default class InvalidGitObjectTypeError extends GitPlumbingError {
+  constructor(type, operation) {
+    super(`Invalid Git object type: ${type}`, operation, { type });
+    this.name = 'InvalidGitObjectTypeError';
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/errors/ProhibitedFlagError.js
+/**
+ * @fileoverview Custom error for prohibited git flags
+ */
+
+import GitPlumbingError from './GitPlumbingError.js';
+
+/**
+ * Error thrown when a prohibited git flag is detected
+ */
+export default class ProhibitedFlagError extends GitPlumbingError {
+  /**
+   * @param {string} flag - The prohibited flag detected
+   * @param {string} operation - The operation being performed
+   * @param {Object} [details] - Additional details or overrides
+   * @param {string} [details.message] - Custom error message
+   */
+  constructor(flag, operation, details = {}) {
+    const defaultMessage = `Prohibited git flag detected: ${flag}. Using flags like --work-tree or --git-dir is forbidden for security and isolation. Please use the 'cwd' option or GitRepositoryService for scoped operations. See README.md for more details.`;
+    const message = details.message || defaultMessage;
+    super(message, operation, { flag, ...details });
+    this.name = 'ProhibitedFlagError';
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/errors/ValidationError.js
+/**
+ * @fileoverview Custom error for validation failures
+ */
+
+import GitPlumbingError from './GitPlumbingError.js';
+
+/**
+ * Error thrown when validation fails
+ */
+export default class ValidationError extends GitPlumbingError {
+  /**
+   * @param {string} message
+   * @param {string} operation
+   * @param {Object} [details={}]
+   */
+  constructor(message, operation, details = {}) {
+    super(message, operation, details);
+    this.name = 'ValidationError';
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/schemas/GitBlobSchema.js
+import { z } from 'zod';
+import { GitShaSchema } from './GitShaSchema.js';
+
+/**
+ * Zod schema for GitBlob validation.
+ */
+export const GitBlobSchema = z.object({
+  sha: GitShaSchema.nullable().optional(),
+  content: z.union([z.string(), z.instanceof(Uint8Array)])
+});
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/schemas/GitCommitSchema.js
+import { z } from 'zod';
+import { GitShaSchema } from './GitShaSchema.js';
+import { GitSignatureSchema } from './GitSignatureSchema.js';
+
+/**
+ * Zod schema for GitCommit validation.
+ */
+export const GitCommitSchema = z.object({
+  sha: GitShaSchema.nullable().optional(),
+  treeSha: GitShaSchema, // Reference to the tree
+  parents: z.array(GitShaSchema),
+  author: GitSignatureSchema,
+  committer: GitSignatureSchema,
+  message: z.string()
+});
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/schemas/GitFileModeSchema.js
+import { z } from 'zod';
+
+/**
+ * Valid Git file mode strings.
+ */
+export const GitFileModeSchema = z.enum([
+  '100644', // REGULAR
+  '100755', // EXECUTABLE
+  '120000', // SYMLINK
+  '040000', // TREE
+  '160000'  // COMMIT (Submodule)
+]);
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/schemas/GitObjectTypeSchema.js
+import { z } from 'zod';
+
+/**
+ * Valid Git object type strings.
+ */
+export const GitObjectTypeStrings = z.enum([
+  'blob',
+  'tree',
+  'commit',
+  'tag',
+  'ofs-delta',
+  'ref-delta'
+]);
+
+/**
+ * Valid Git object type integers.
+ */
+export const GitObjectTypeInts = z.union([
+  z.literal(1), // blob
+  z.literal(2), // tree
+  z.literal(3), // commit
+  z.literal(4), // tag
+  z.literal(6), // ofs-delta
+  z.literal(7)  // ref-delta
+]);
+
+/**
+ * Zod schema for GitObjectType validation.
+ */
+export const GitObjectTypeSchema = z.union([GitObjectTypeStrings, GitObjectTypeInts]);
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/schemas/GitRefSchema.js
+import { z } from 'zod';
+
+/**
+ * Zod schema for GitRef validation.
+ * Implements core rules of git-check-ref-format.
+ */
+export const GitRefSchema = z.string()
+  .min(1)
+  .refine(val => !val.startsWith('.'), 'Cannot start with a dot')
+  .refine(val => !val.endsWith('.'), 'Cannot end with a dot')
+  .refine(val => !val.includes('..'), 'Cannot contain double dots')
+  .refine(val => !val.includes('/.'), 'Components cannot start with a dot')
+  .refine(val => !val.includes('//'), 'Cannot contain consecutive slashes')
+  .refine(val => !val.endsWith('.lock'), 'Cannot end with .lock')
+  .refine(val => {
+    // Prohibited characters: space, ~, ^, :, ?, *, [, \
+    const prohibited = [' ', '~', '^', ':', '?', '*', '[', '\\'];
+    return !prohibited.some(char => val.includes(char));
+  }, 'Contains prohibited characters')
+  .refine(val => {
+    // Control characters (0-31 and 127)
+    return !Array.from(val).some(char => {
+      const code = char.charCodeAt(0);
+      return code < 32 || code === 127;
+    });
+  }, 'Cannot contain control characters')
+  .refine(val => val !== '@' && !val.includes('@{'), "Cannot be '@' alone or contain '@{'");
+
+# /Users/james/git/git-stunts/plumbing/src/domain/schemas/GitShaSchema.js
+import { z } from 'zod';
+
+/**
+ * Zod schema for GitSha validation.
+ */
+export const GitShaSchema = z.string()
+  .length(40)
+  .regex(/^[a-f0-9]+$/i)
+  .transform(val => val.toLowerCase());
+
+/**
+ * Zod schema for GitSha object structure.
+ */
+export const GitShaObjectSchema = z.object({
+  sha: GitShaSchema
+});
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/schemas/GitSignatureSchema.js
+import { z } from 'zod';
+
+/**
+ * Zod schema for GitSignature validation.
+ */
+export const GitSignatureSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  timestamp: z.number().int().nonnegative().default(() => Math.floor(Date.now() / 1000))
+});
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/schemas/GitTreeEntrySchema.js
+import { z } from 'zod';
+import { GitShaSchema } from './GitShaSchema.js';
+import { GitFileModeSchema } from './GitFileModeSchema.js';
+
+/**
+ * Zod schema for GitTreeEntry validation.
+ */
+export const GitTreeEntrySchema = z.object({
+  mode: GitFileModeSchema,
+  sha: GitShaSchema,
+  path: z.string().min(1)
+});
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/schemas/GitTreeSchema.js
+import { z } from 'zod';
+import { GitShaSchema } from './GitShaSchema.js';
+import { GitTreeEntrySchema } from './GitTreeEntrySchema.js';
+
+/**
+ * Zod schema for GitTree validation.
+ */
+export const GitTreeSchema = z.object({
+  sha: GitShaSchema.nullable().optional(),
+  entries: z.array(GitTreeEntrySchema)
+});
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/services/ByteMeasurer.js
+/**
+ * @fileoverview Domain service for measuring byte size of content
+ */
+
+const ENCODER = new TextEncoder();
+
+/**
+ * Service to measure the byte size of different content types.
+ * Optimized for Node.js, Bun, and Deno runtimes.
+ */
+export default class ByteMeasurer {
+  /**
+   * Measures the byte length of a string or binary content.
+   * Optimized for Node.js and other runtimes.
+   * @param {string|Uint8Array|ArrayBuffer|SharedArrayBuffer|{length: number}} content
+   * @returns {number}
+   * @throws {TypeError} If the content type is unsupported.
+   */
+  static measure(content) {
+    if (content === null || content === undefined) {
+      throw new TypeError('Content cannot be null or undefined');
+    }
+
+    if (typeof content === 'string') {
+      // Node.js / Bun optimization - fastest way to get UTF-8 byte length without allocation
+      if (typeof Buffer !== 'undefined' && typeof Buffer.byteLength === 'function') {
+        return Buffer.byteLength(content, 'utf8');
+      }
+      // Fallback for Deno / Browser
+      return ENCODER.encode(content).length;
+    }
+
+    if (content instanceof Uint8Array) {
+      return content.length;
+    }
+
+    if (content instanceof ArrayBuffer || (typeof SharedArrayBuffer !== 'undefined' && content instanceof SharedArrayBuffer)) {
+      return content.byteLength;
+    }
+
+    if (ArrayBuffer.isView(content)) {
+      return content.byteLength;
+    }
+
+    if (typeof content === 'object' && typeof content.length === 'number' && Number.isFinite(content.length)) {
+      return content.length;
+    }
+
+    throw new TypeError(`Unsupported content type for ByteMeasurer.measure: ${typeof content}`);
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/services/CommandSanitizer.js
+/**
+ * @fileoverview Domain service for sanitizing git command arguments
+ */
+
+import ValidationError from '../errors/ValidationError.js';
+import ProhibitedFlagError from '../errors/ProhibitedFlagError.js';
+
+/**
+ * Sanitizes and validates git command arguments.
+ * Implements a defense-in-depth strategy by whitelisting commands,
+ * blocking dangerous flags, and preventing global flag escapes.
+ */
+export default class CommandSanitizer {
+  static MAX_ARGS = 1000;
+  static MAX_ARG_LENGTH = 8192;
+  static MAX_TOTAL_LENGTH = 65536;
+
+  /**
+   * Comprehensive whitelist of allowed git plumbing and essential porcelain commands.
+   * @private
+   */
+  static _ALLOWED_COMMANDS = new Set([
+    'rev-parse',
+    'update-ref',
+    'cat-file',
+    'hash-object',
+    'ls-tree',
+    'commit-tree',
+    'write-tree',
+    'read-tree',
+    'rev-list',
+    'mktree',
+    'unpack-objects',
+    'symbolic-ref',
+    'for-each-ref',
+    'show-ref',
+    'diff-tree',
+    'diff-index',
+    'diff-files',
+    'merge-base',
+    'ls-files',
+    'check-ignore',
+    'check-attr',
+    '--version',
+    'init',
+    'config'
+  ]);
+
+  /**
+   * Flags that are strictly prohibited due to security risks or environment interference.
+   */
+  static PROHIBITED_FLAGS = [
+    '--upload-pack',
+    '--receive-pack',
+    '--ext-cmd',
+    '--exec-path',
+    '--html-path',
+    '--man-path',
+    '--info-path',
+    '--work-tree',
+    '--git-dir',
+    '--namespace',
+    '--template'
+  ];
+
+  /**
+   * Global git flags that are prohibited if they appear before the subcommand.
+   */
+  static GLOBAL_FLAGS = [
+    '-C',
+    '-c',
+    '--git-dir'
+  ];
+
+  /**
+   * Dynamically allows a command.
+   * @param {string} commandName
+   */
+  static allow(commandName) {
+    CommandSanitizer._ALLOWED_COMMANDS.add(commandName.toLowerCase());
+  }
+
+  /**
+   * @param {Object} [options]
+   * @param {number} [options.maxCacheSize=100]
+   */
+  constructor({ maxCacheSize = 100 } = {}) {
+    /** @private */
+    this._cache = new Map();
+    /** @private */
+    this._maxCacheSize = maxCacheSize;
+  }
+
+  /**
+   * Validates a list of arguments for potential injection or prohibited flags.
+   * Includes memoization to skip re-validation of repetitive commands.
+   * @param {string[]} args - The array of git arguments to sanitize.
+   * @returns {string[]} The validated arguments array.
+   * @throws {ValidationError|ProhibitedFlagError} If validation fails.
+   */
+  sanitize(args) {
+    if (!Array.isArray(args)) {
+      throw new ValidationError('Arguments must be an array', 'CommandSanitizer.sanitize');
+    }
+
+    // Simple cache key: joined arguments
+    const cacheKey = args.join('\0');
+    if (this._cache.has(cacheKey)) {
+      return args;
+    }
+
+    if (args.length === 0) {
+      throw new ValidationError('Arguments array cannot be empty', 'CommandSanitizer.sanitize');
+    }
+
+    if (args.length > CommandSanitizer.MAX_ARGS) {
+      throw new ValidationError(`Too many arguments: ${args.length}`, 'CommandSanitizer.sanitize');
+    }
+
+    // Find the first non-flag argument to identify the subcommand
+    let subcommandIndex = -1;
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (typeof arg !== 'string') {
+        throw new ValidationError('Each argument must be a string', 'CommandSanitizer.sanitize', { arg });
+      }
+      if (!arg.startsWith('-')) {
+        subcommandIndex = i;
+        break;
+      }
+    }
+
+    // Block global flags if they appear before the subcommand
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      const lowerArg = arg.toLowerCase();
+      
+      // If we haven't reached the subcommand yet, check for prohibited global flags
+      if (subcommandIndex === -1 || i < subcommandIndex) {
+        if (CommandSanitizer.GLOBAL_FLAGS.some(flag => lowerArg === flag.toLowerCase() || lowerArg.startsWith(`${flag.toLowerCase()}=`))) {
+          throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize', { 
+            message: `Global flag "${arg}" is prohibited before the subcommand.` 
+          });
+        }
+      }
+    }
+
+    // The base command (after global flags) must be in the whitelist
+    const commandArg = subcommandIndex !== -1 ? args[subcommandIndex] : args[0];
+    if (typeof commandArg !== 'string') {
+      throw new ValidationError('Command must be a string', 'CommandSanitizer.sanitize', { command: commandArg });
+    }
+    
+    const command = commandArg.toLowerCase();
+    if (!CommandSanitizer._ALLOWED_COMMANDS.has(command)) {
+      throw new ValidationError(`Prohibited git command detected: ${command}`, 'CommandSanitizer.sanitize', { command });
+    }
+
+    let totalLength = 0;
+    for (const arg of args) {
+      if (typeof arg !== 'string') {
+        throw new ValidationError('Each argument must be a string', 'CommandSanitizer.sanitize', { arg });
+      }
+
+      if (arg.length > CommandSanitizer.MAX_ARG_LENGTH) {
+        throw new ValidationError(`Argument too long: ${arg.length}`, 'CommandSanitizer.sanitize');
+      }
+
+      totalLength += arg.length;
+
+      const lowerArg = arg.toLowerCase();
+
+      // Strengthen configuration flag blocking
+      if (lowerArg === '-c' || lowerArg === '--config' || lowerArg.startsWith('--config=')) {
+        throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize');
+      }
+
+      // Check for other prohibited flags
+      for (const prohibited of CommandSanitizer.PROHIBITED_FLAGS) {
+        if (lowerArg === prohibited || lowerArg.startsWith(`${prohibited}=`)) {
+          throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize');
+        }
+      }
+    }
+
+    if (totalLength > CommandSanitizer.MAX_TOTAL_LENGTH) {
+      throw new ValidationError(`Total arguments length too long: ${totalLength}`, 'CommandSanitizer.sanitize');
+    }
+    
+    // Manage cache size (LRU-ish: delete oldest entry)
+    if (this._cache.size >= this._maxCacheSize) {
+      const firstKey = this._cache.keys().next().value;
+      this._cache.delete(firstKey);
+    }
+    this._cache.set(cacheKey, true);
+
+    return args;
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/services/EnvironmentPolicy.js
+/**
+ * @fileoverview EnvironmentPolicy - Domain service for environment variable security
+ */
+
+/**
+ * EnvironmentPolicy defines which environment variables are safe to pass 
+ * to the underlying Git process.
+ * 
+ * It whitelists essential variables for identity and localization while
+ * explicitly blocking variables that could override security settings.
+ */
+export default class EnvironmentPolicy {
+  /**
+   * List of environment variables allowed to be passed to the git process.
+   * Whitelists identity (GIT_AUTHOR_*, GIT_COMMITTER_*) and localization (LANG, LC_ALL).
+   * @private
+   */
+  static _ALLOWED_KEYS = [
+    'PATH',
+    'GIT_EXEC_PATH',
+    'GIT_TEMPLATE_DIR',
+    'GIT_CONFIG_NOSYSTEM',
+    'GIT_ATTR_NOSYSTEM',
+    // Identity
+    'GIT_AUTHOR_NAME',
+    'GIT_AUTHOR_EMAIL',
+    'GIT_AUTHOR_DATE',
+    'GIT_AUTHOR_TZ',
+    'GIT_COMMITTER_NAME',
+    'GIT_COMMITTER_EMAIL',
+    'GIT_COMMITTER_DATE',
+    'GIT_COMMITTER_TZ',
+    // Localization & Encoding
+    'LANG',
+    'LC_ALL',
+    'LC_CTYPE',
+    'LC_MESSAGES'
+  ];
+
+  /**
+   * List of environment variables that are explicitly blocked.
+   * @private
+   */
+  static _BLOCKED_KEYS = [
+    'GIT_CONFIG_PARAMETERS'
+  ];
+
+  /**
+   * Filters the provided environment object based on the whitelist and blacklist.
+   * @param {Object} env - The source environment object (e.g., process.env).
+   * @returns {Object} A sanitized environment object.
+   */
+  static filter(env = {}) {
+    const sanitized = {};
+    
+    for (const key of EnvironmentPolicy._ALLOWED_KEYS) {
+      // Ensure we don't allow a key if it's also in the blocked list (redundancy)
+      if (EnvironmentPolicy._BLOCKED_KEYS.includes(key)) {
+        continue;
+      }
+
+      if (env[key] !== undefined) {
+        sanitized[key] = env[key];
+      }
+    }
+
+    return sanitized;
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/services/ExecutionOrchestrator.js
+/**
+ * @fileoverview ExecutionOrchestrator - Domain service for command execution lifecycle
+ */
+
+import GitErrorClassifier from './GitErrorClassifier.js';
+import GitPlumbingError from '../errors/GitPlumbingError.js';
+
+/**
+ * ExecutionOrchestrator manages the retry and failure detection logic for Git commands.
+ * Implements a "Total Operation Timeout" to prevent infinite retry loops.
+ */
+export default class ExecutionOrchestrator {
+  /**
+   * @param {Object} [options]
+   * @param {GitErrorClassifier} [options.classifier]
+   */
+  constructor({ classifier = new GitErrorClassifier() } = {}) {
+    /** @private */
+    this.classifier = classifier;
+  }
+
+  /**
+   * Orchestrates the execution of a command with retry and lock detection.
+   * @param {Object} options
+   * @param {Function} options.execute - Async function that performs a single execution attempt.
+   * @param {import('../value-objects/CommandRetryPolicy.js').default} options.retryPolicy
+   * @param {string[]} options.args
+   * @param {string} options.traceId
+   * @returns {Promise<string>}
+   */
+  async orchestrate({ execute, retryPolicy, args, traceId }) {
+    const operationStartTime = performance.now();
+    let attempt = 0;
+
+    while (attempt < retryPolicy.maxAttempts) {
+      const startTime = performance.now();
+      attempt++;
+
+      // 1. Check for total operation timeout before starting attempt
+      this._checkTotalTimeout(operationStartTime, retryPolicy.totalTimeout, args, traceId);
+
+      try {
+        const { stdout, result } = await execute();
+        const latency = performance.now() - startTime;
+
+        // 2. Check for total operation timeout after execute() completes
+        this._checkTotalTimeout(operationStartTime, retryPolicy.totalTimeout, args, traceId);
+
+        if (result.code !== 0) {
+          const error = this.classifier.classify({
+            code: result.code,
+            stderr: result.stderr,
+            args,
+            stdout,
+            traceId,
+            latency,
+            operation: 'ExecutionOrchestrator.orchestrate'
+          });
+
+          if (this.classifier.isRetryable(error) && attempt < retryPolicy.maxAttempts) {
+            const backoff = retryPolicy.getDelay(attempt);
+            
+            // Re-check if we have time for backoff + next attempt
+            if (retryPolicy.totalTimeout && (performance.now() - operationStartTime + backoff) > retryPolicy.totalTimeout) {
+              throw error; // Not enough time left for backoff
+            }
+
+            await new Promise(resolve => setTimeout(resolve, backoff));
+            continue;
+          }
+
+          throw error;
+        }
+
+        return stdout.trim();
+      } catch (err) {
+        // Rethrow classified GitPlumbingErrors, wrap others
+        if (err instanceof GitPlumbingError) {
+          throw err;
+        }
+        throw new GitPlumbingError(err.message, 'ExecutionOrchestrator.orchestrate', { 
+          args, 
+          traceId, 
+          originalError: err 
+        });
+      }
+    }
+
+    throw new GitPlumbingError('All retry attempts exhausted', 'ExecutionOrchestrator.orchestrate', {
+      args,
+      traceId,
+      attempt,
+      retryPolicy
+    });
+  }
+
+  /**
+   * Helper to verify if total operation timeout has been exceeded.
+   * @private
+   */
+  _checkTotalTimeout(startTime, totalTimeout, args, traceId) {
+    if (!totalTimeout) {return;}
+    
+    const elapsedTotal = performance.now() - startTime;
+    if (elapsedTotal > totalTimeout) {
+      throw new GitPlumbingError(
+        `Total operation timeout exceeded after ${Math.round(elapsedTotal)}ms`, 
+        'ExecutionOrchestrator.orchestrate',
+        { args, traceId, elapsedTotal, totalTimeout }
+      );
+    }
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/services/GitBinaryChecker.js
+/**
+ * @fileoverview GitBinaryChecker - Domain service for verifying Git availability
+ */
+
+import GitPlumbingError from '../errors/GitPlumbingError.js';
+
+/**
+ * Service to verify that the Git binary is installed and functional.
+ */
+export default class GitBinaryChecker {
+  /**
+   * @param {Object} options
+   * @param {import('../../../index.js').default} options.plumbing - The plumbing service for execution.
+   */
+  constructor({ plumbing }) {
+    /** @private */
+    this.plumbing = plumbing;
+  }
+
+  /**
+   * Verifies that the git binary is available.
+   * @returns {Promise<boolean>}
+   * @throws {GitPlumbingError}
+   */
+  async check() {
+    try {
+      // Check binary availability by calling --version
+      await this.plumbing.execute({ args: ['--version'] });
+      return true;
+    } catch (err) {
+      throw new GitPlumbingError(
+        `Git binary verification failed: ${err.message}`, 
+        'GitBinaryChecker.check', 
+        { originalError: err.message, code: 'GIT_BINARY_NOT_FOUND' }
+      );
+    }
+  }
+
+  /**
+   * Checks if the current working directory is inside a Git repository.
+   * @returns {Promise<boolean>}
+   * @throws {GitPlumbingError}
+   */
+  async isInsideWorkTree() {
+    try {
+      const isInside = await this.plumbing.execute({ args: ['rev-parse', '--is-inside-work-tree'] });
+      return isInside === 'true';
+    } catch (err) {
+      throw new GitPlumbingError(
+        `Git repository verification failed: ${err.message}`, 
+        'GitBinaryChecker.isInsideWorkTree', 
+        { originalError: err.message, code: 'GIT_NOT_IN_REPO' }
+      );
+    }
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/services/GitCommandBuilder.js
+/**
+ * @fileoverview Domain service for building git command arguments
+ */
+
+/**
+ * Fluent builder for git command arguments.
+ * Provides a type-safe and expressive API for constructing Git plumbing commands.
+ */
+export default class GitCommandBuilder {
+  /**
+   * @param {string} command - The git plumbing command (e.g., 'update-ref')
+   */
+  constructor(command) {
+    this._command = command;
+    this._args = [command];
+  }
+
+  // --- Static Factory Methods ---
+
+  static revParse() { return new GitCommandBuilder('rev-parse'); }
+  static updateRef() { return new GitCommandBuilder('update-ref'); }
+  static catFile() { return new GitCommandBuilder('cat-file'); }
+  static hashObject() { return new GitCommandBuilder('hash-object'); }
+  static lsTree() { return new GitCommandBuilder('ls-tree'); }
+  static commitTree() { return new GitCommandBuilder('commit-tree'); }
+  static writeTree() { return new GitCommandBuilder('write-tree'); }
+  static readTree() { return new GitCommandBuilder('read-tree'); }
+  static revList() { return new GitCommandBuilder('rev-list'); }
+  static mktree() { return new GitCommandBuilder('mktree'); }
+  static unpackObjects() { return new GitCommandBuilder('unpack-objects'); }
+  static symbolicRef() { return new GitCommandBuilder('symbolic-ref'); }
+  static forEachRef() { return new GitCommandBuilder('for-each-ref'); }
+  static showRef() { return new GitCommandBuilder('show-ref'); }
+  static diffTree() { return new GitCommandBuilder('diff-tree'); }
+  static diffIndex() { return new GitCommandBuilder('diff-index'); }
+  static diffFiles() { return new GitCommandBuilder('diff-files'); }
+  static mergeBase() { return new GitCommandBuilder('merge-base'); }
+  static lsFiles() { return new GitCommandBuilder('ls-files'); }
+  static checkIgnore() { return new GitCommandBuilder('check-ignore'); }
+  static checkAttr() { return new GitCommandBuilder('check-attr'); }
+  static version() { return new GitCommandBuilder('--version'); }
+  static init() { return new GitCommandBuilder('init'); }
+  static config() { return new GitCommandBuilder('config'); }
+
+  // --- Fluent flag methods ---
+
+  /**
+   * Adds the --stdin flag
+   * @returns {GitCommandBuilder}
+   */
+  stdin() {
+    this._args.push('--stdin');
+    return this;
+  }
+
+  /**
+   * Adds the -w flag (write)
+   * @returns {GitCommandBuilder}
+   */
+  write() {
+    this._args.push('-w');
+    return this;
+  }
+
+  /**
+   * Adds the -p flag (pretty-print)
+   * @returns {GitCommandBuilder}
+   */
+  pretty() {
+    this._args.push('-p');
+    return this;
+  }
+
+  /**
+   * Adds the -t flag (type)
+   * @returns {GitCommandBuilder}
+   */
+  type() {
+    this._args.push('-t');
+    return this;
+  }
+
+  /**
+   * Adds the -s flag (size)
+   * @returns {GitCommandBuilder}
+   */
+  size() {
+    this._args.push('-s');
+    return this;
+  }
+
+  /**
+   * Adds the -m flag (message)
+   * @param {string} msg
+   * @returns {GitCommandBuilder}
+   */
+  message(msg) {
+    this._args.push('-m', msg);
+    return this;
+  }
+
+  /**
+   * Adds the -p flag (parent) - Note: shared with pretty-print in some commands
+   * @param {string} sha
+   * @returns {GitCommandBuilder}
+   */
+  parent(sha) {
+    this._args.push('-p', sha);
+    return this;
+  }
+
+  /**
+   * Adds the -d flag (delete)
+   * @returns {GitCommandBuilder}
+   */
+  delete() {
+    this._args.push('-d');
+    return this;
+  }
+
+  /**
+   * Adds the -z flag (NUL-terminated output)
+   * @returns {GitCommandBuilder}
+   */
+  nul() {
+    this._args.push('-z');
+    return this;
+  }
+
+  /**
+   * Adds the --batch flag
+   * @returns {GitCommandBuilder}
+   */
+  batch() {
+    this._args.push('--batch');
+    return this;
+  }
+
+  /**
+   * Adds the --batch-check flag
+   * @returns {GitCommandBuilder}
+   */
+  batchCheck() {
+    this._args.push('--batch-check');
+    return this;
+  }
+
+  /**
+   * Adds the --all flag
+   * @returns {GitCommandBuilder}
+   */
+  all() {
+    this._args.push('--all');
+    return this;
+  }
+
+  /**
+   * Adds a positional argument to the command.
+   * @param {string|number|null|undefined} arg - The argument to add.
+   * @returns {GitCommandBuilder} This builder instance for chaining.
+   */
+  arg(arg) {
+    if (arg !== undefined && arg !== null) {
+      this._args.push(String(arg));
+    }
+    return this;
+  }
+
+  /**
+   * Builds the arguments array
+   * @returns {string[]}
+   */
+  build() {
+    return [...this._args];
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/services/GitErrorClassifier.js
+/**
+ * @fileoverview GitErrorClassifier - Domain service for categorizing Git errors
+ */
+
+import GitPlumbingError from '../errors/GitPlumbingError.js';
+import GitRepositoryLockedError from '../errors/GitRepositoryLockedError.js';
+
+/**
+ * Classifies Git errors based on exit codes and stderr patterns.
+ */
+export default class GitErrorClassifier {
+  /**
+   * @param {Object} [options]
+   * @param {Array<{test: function(number, string): boolean, create: function(Object): Error}>} [options.customRules=[]]
+   */
+  constructor({ customRules = [] } = {}) {
+    /** @private */
+    this.customRules = customRules;
+  }
+
+  /**
+   * Classifies a Git command failure.
+   * @param {Object} options
+   * @param {number} options.code
+   * @param {string} options.stderr
+   * @param {string[]} options.args
+   * @param {string} [options.stdout]
+   * @param {string} options.traceId
+   * @param {number} options.latency
+   * @param {string} options.operation
+   * @returns {GitPlumbingError}
+   */
+  classify({ code, stderr, args, stdout, traceId, latency, operation }) {
+    // 1. Check custom rules first
+    for (const rule of this.customRules) {
+      if (rule.test(code, stderr)) {
+        return rule.create({ code, stderr, args, stdout, traceId, latency, operation });
+      }
+    }
+
+    // 2. Check for lock contention (Exit code 128 indicates state/lock issues)
+    // Use regex for more robust detection of lock files (index.lock or other .lock files)
+    const lockRegex = /\w+\.lock/;
+    const isLocked = code === 128 && (lockRegex.test(stderr) || stderr.includes('lock'));
+
+    if (isLocked) {
+      return new GitRepositoryLockedError(`Git command failed: repository is locked`, operation, {
+        args,
+        stderr,
+        code,
+        traceId,
+        latency
+      });
+    }
+
+    return new GitPlumbingError(`Git command failed with code ${code}`, operation, {
+      args,
+      stderr,
+      stdout,
+      code,
+      traceId,
+      latency
+    });
+  }
+
+  /**
+   * Checks if an error is retryable (e.g., lock contention).
+   * @param {Error} err
+   * @returns {boolean}
+   */
+  isRetryable(err) {
+    return err instanceof GitRepositoryLockedError;
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/services/GitPersistenceService.js
+/**
+ * @fileoverview GitPersistenceService - Domain service for Git object persistence
+ */
+
+import GitSha from '../value-objects/GitSha.js';
+import GitCommandBuilder from './GitCommandBuilder.js';
+import GitBlob from '../entities/GitBlob.js';
+import GitTree from '../entities/GitTree.js';
+import GitCommit from '../entities/GitCommit.js';
+import InvalidArgumentError from '../errors/InvalidArgumentError.js';
+import EnvironmentPolicy from './EnvironmentPolicy.js';
+
+/**
+ * GitPersistenceService implements the persistence logic for Git entities.
+ */
+export default class GitPersistenceService {
+  /**
+   * @param {Object} options
+   * @param {import('../../../index.js').default} options.plumbing - The plumbing service for execution.
+   */
+  constructor({ plumbing }) {
+    this.plumbing = plumbing;
+  }
+
+  /**
+   * Persists a Git entity (Blob, Tree, or Commit).
+   * @param {GitBlob|GitTree|GitCommit} entity
+   * @returns {Promise<GitSha>}
+   */
+  async persist(entity) {
+    if (entity instanceof GitBlob) {
+      return await this.writeBlob(entity);
+    } else if (entity instanceof GitTree) {
+      return await this.writeTree(entity);
+    } else if (entity instanceof GitCommit) {
+      return await this.writeCommit(entity);
+    }
+    throw new InvalidArgumentError('Unsupported entity type for persistence', 'GitPersistenceService.persist');
+  }
+
+  /**
+   * Persists a GitBlob to the object database.
+   * @param {GitBlob} blob
+   * @returns {Promise<GitSha>}
+   */
+  async writeBlob(blob) {
+    if (!(blob instanceof GitBlob)) {
+      throw new InvalidArgumentError('Expected instance of GitBlob', 'GitPersistenceService.writeBlob');
+    }
+
+    const args = GitCommandBuilder.hashObject()
+      .write()
+      .stdin()
+      .build();
+
+    const shaStr = await this.plumbing.execute({
+      args,
+      input: blob.content
+    });
+
+    return GitSha.from(shaStr.trim());
+  }
+
+  /**
+   * Persists a GitTree to the object database.
+   * @param {GitTree} tree
+   * @returns {Promise<GitSha>}
+   */
+  async writeTree(tree) {
+    if (!(tree instanceof GitTree)) {
+      throw new InvalidArgumentError('Expected instance of GitTree', 'GitPersistenceService.writeTree');
+    }
+
+    const input = tree.toMktreeFormat();
+    const args = GitCommandBuilder.mktree().build();
+
+    const shaStr = await this.plumbing.execute({
+      args,
+      input
+    });
+
+    return GitSha.from(shaStr.trim());
+  }
+
+  /**
+   * Persists a GitCommit to the object database.
+   * @param {GitCommit} commit
+   * @returns {Promise<GitSha>}
+   */
+  async writeCommit(commit) {
+    if (!(commit instanceof GitCommit)) {
+      throw new InvalidArgumentError('Expected instance of GitCommit', 'GitPersistenceService.writeCommit');
+    }
+
+    const builder = GitCommandBuilder.commitTree()
+      .arg(commit.treeSha.toString());
+
+    for (const parent of commit.parents) {
+      builder.parent(parent.toString());
+    }
+
+    builder.message(commit.message);
+
+    const args = builder.build();
+
+    // Ensure environment is filtered through policy
+    const env = EnvironmentPolicy.filter({
+      GIT_AUTHOR_NAME: commit.author.name,
+      GIT_AUTHOR_EMAIL: commit.author.email,
+      GIT_AUTHOR_DATE: `${commit.author.timestamp} +0000`,
+      GIT_COMMITTER_NAME: commit.committer.name,
+      GIT_COMMITTER_EMAIL: commit.committer.email,
+      GIT_COMMITTER_DATE: `${commit.committer.timestamp} +0000`
+    });
+    
+    const shaStr = await this.plumbing.execute({ args, env });
+
+    return GitSha.from(shaStr.trim());
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/services/GitRepositoryService.js
+/**
+ * @fileoverview GitRepositoryService - High-level domain service for repository operations
+ */
+
+import GitSha from '../value-objects/GitSha.js';
+import GitCommandBuilder from './GitCommandBuilder.js';
+import GitPersistenceService from './GitPersistenceService.js';
+import GitBlob from '../entities/GitBlob.js';
+import GitTree from '../entities/GitTree.js';
+import GitTreeEntry from '../entities/GitTreeEntry.js';
+import GitCommit from '../entities/GitCommit.js';
+
+/**
+ * GitRepositoryService provides high-level operations on a Git repository.
+ * It uses a CommandRunner port via GitPlumbing to execute commands.
+ */
+export default class GitRepositoryService {
+  /**
+   * @param {Object} options
+   * @param {import('../../../index.js').default} options.plumbing - The plumbing service for execution.
+   * @param {GitPersistenceService} [options.persistence] - Injected persistence service.
+   */
+  constructor({ plumbing, persistence = new GitPersistenceService({ plumbing }) }) {
+    this.plumbing = plumbing;
+    this.persistence = persistence;
+  }
+
+  /**
+   * Orchestrates a full commit sequence from files and metadata.
+   * Uses a concurrency limit to prevent resource exhaustion during blob creation.
+   * @param {Object} options
+   * @param {string} options.branch - The reference to update (e.g., 'refs/heads/main')
+   * @param {string} options.message - Commit message
+   * @param {import('../value-objects/GitSignature.js').default} options.author
+   * @param {import('../value-objects/GitSignature.js').default} options.committer
+   * @param {import('../value-objects/GitSha.js').default[]} options.parents
+   * @param {Array<{path: string, content: string|Uint8Array, mode: string}>} options.files
+   * @param {number} [options.concurrency=10] - Max parallel blob write operations.
+   * @returns {Promise<GitSha>} The resulting commit SHA.
+   */
+  async createCommitFromFiles({ 
+    branch, 
+    message, 
+    author, 
+    committer, 
+    parents, 
+    files, 
+    concurrency = 10 
+  }) {
+    const entries = [];
+    const remainingFiles = [...files];
+    
+    // Concurrency limit for writing blobs
+    const processBatch = async () => {
+      const batch = remainingFiles.splice(0, concurrency);
+      if (batch.length === 0) {return;}
+
+      const batchResults = await Promise.all(batch.map(async (file) => {
+        const blob = GitBlob.fromContent(file.content);
+        const sha = await this.writeBlob(blob);
+        return new GitTreeEntry({
+          path: file.path,
+          sha,
+          mode: file.mode || '100644'
+        });
+      }));
+
+      entries.push(...batchResults);
+      await processBatch();
+    };
+
+    await processBatch();
+
+    // 2. Write Tree
+    const tree = new GitTree(null, entries);
+    const treeSha = await this.writeTree(tree);
+
+    // 3. Write Commit
+    const commit = new GitCommit({
+      sha: null,
+      treeSha,
+      parents,
+      author,
+      committer,
+      message
+    });
+    const commitSha = await this.writeCommit(commit);
+
+    // 4. Update Reference
+    if (branch) {
+      await this.updateRef({ ref: branch, newSha: commitSha });
+    }
+
+    return commitSha;
+  }
+
+  /**
+   * Persists any Git entity (Blob, Tree, or Commit) and returns its SHA.
+   * @param {import('../entities/GitBlob.js').default|import('../entities/GitTree.js').default|import('../entities/GitCommit.js').default} entity
+   * @returns {Promise<import('../value-objects/GitSha.js').default>}
+   */
+  async save(entity) {
+    return await this.persistence.persist(entity);
+  }
+
+  /**
+   * Persists a blob.
+   * @param {import('../entities/GitBlob.js').default} blob
+   * @returns {Promise<GitSha>}
+   */
+  async writeBlob(blob) {
+    return await this.persistence.writeBlob(blob);
+  }
+
+  /**
+   * Persists a tree.
+   * @param {import('../entities/GitTree.js').default} tree
+   * @returns {Promise<GitSha>}
+   */
+  async writeTree(tree) {
+    return await this.persistence.writeTree(tree);
+  }
+
+  /**
+   * Persists a commit.
+   * @param {import('../entities/GitCommit.js').default} commit
+   * @returns {Promise<GitSha>}
+   */
+  async writeCommit(commit) {
+    return await this.persistence.writeCommit(commit);
+  }
+
+  /**
+   * Resolves a revision to a full SHA.
+   * @param {Object} options
+   * @param {string} options.revision
+   * @returns {Promise<string>}
+   */
+  async revParse({ revision }) {
+    const args = GitCommandBuilder.revParse().arg(revision).build();
+    return await this.plumbing.execute({ args });
+  }
+
+  /**
+   * Updates a reference to point to a new SHA.
+   * @param {Object} options
+   * @param {string} options.ref
+   * @param {import('../value-objects/GitSha.js').default|string} options.newSha
+   * @param {import('../value-objects/GitSha.js').default|string} [options.oldSha]
+   */
+  async updateRef({ ref, newSha, oldSha }) {
+    const gitNewSha = newSha instanceof GitSha ? newSha : GitSha.from(newSha);
+    const gitOldSha = oldSha ? (oldSha instanceof GitSha ? oldSha : GitSha.from(oldSha)) : null;
+
+    const args = GitCommandBuilder.updateRef()
+      .arg(ref)
+      .arg(gitNewSha.toString())
+      .arg(gitOldSha ? gitOldSha.toString() : null)
+      .build();
+    await this.plumbing.execute({ args });
+  }
+
+  /**
+   * Deletes a reference.
+   * @param {Object} options
+   * @param {string} options.ref
+   */
+  async deleteRef({ ref }) {
+    const args = GitCommandBuilder.updateRef().delete().arg(ref).build();
+    await this.plumbing.execute({ args });
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/value-objects/CommandRetryPolicy.js
+/**
+ * @fileoverview CommandRetryPolicy - Value object for retry logic configuration
+ */
+
+import InvalidArgumentError from '../errors/InvalidArgumentError.js';
+
+/**
+ * Encapsulates the strategy for retrying failed commands.
+ */
+export default class CommandRetryPolicy {
+  /**
+   * @param {Object} options
+   * @param {number} [options.maxAttempts=3]
+   * @param {number} [options.initialDelayMs=100]
+   * @param {number} [options.backoffFactor=2]
+   * @param {number} [options.totalTimeout=30000] - Total timeout for all attempts in ms.
+   */
+  constructor({ maxAttempts = 3, initialDelayMs = 100, backoffFactor = 2, totalTimeout = 30000 } = {}) {
+    if (maxAttempts < 1) {
+      throw new InvalidArgumentError('maxAttempts must be at least 1', 'CommandRetryPolicy.constructor');
+    }
+
+    this.maxAttempts = maxAttempts;
+    this.initialDelayMs = initialDelayMs;
+    this.backoffFactor = backoffFactor;
+    this.totalTimeout = totalTimeout;
+  }
+
+  /**
+   * Calculates the delay for a given attempt.
+   * @param {number} attempt - 1-based attempt number.
+   * @returns {number} Delay in milliseconds.
+   */
+  getDelay(attempt) {
+    if (attempt <= 1) {
+      return 0;
+    }
+    return Math.pow(this.backoffFactor, attempt - 1) * this.initialDelayMs;
+  }
+
+  /**
+   * Creates a default policy.
+   * @returns {CommandRetryPolicy}
+   */
+  static default() {
+    return new CommandRetryPolicy();
+  }
+
+  /**
+   * Creates a policy with no retries.
+   * @returns {CommandRetryPolicy}
+   */
+  static none() {
+    return new CommandRetryPolicy({ maxAttempts: 1 });
+  }
+
+  /**
+   * Returns a JSON representation.
+   * @returns {Object}
+   */
+  toJSON() {
+    return {
+      maxAttempts: this.maxAttempts,
+      initialDelayMs: this.initialDelayMs,
+      backoffFactor: this.backoffFactor,
+      totalTimeout: this.totalTimeout
+    };
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/value-objects/GitFileMode.js
+/**
+ * @fileoverview GitFileMode value object - represents Git file modes
+ */
+
+import GitObjectType from './GitObjectType.js';
+import ValidationError from '../errors/ValidationError.js';
+
+/**
+ * Represents a Git file mode
+ */
+export default class GitFileMode {
+  static REGULAR = '100644';
+  static EXECUTABLE = '100755';
+  static SYMLINK = '120000';
+  static TREE = '040000';
+  static COMMIT = '160000'; // Submodule
+
+  static VALID_MODES = [
+    GitFileMode.REGULAR,
+    GitFileMode.EXECUTABLE,
+    GitFileMode.SYMLINK,
+    GitFileMode.TREE,
+    GitFileMode.COMMIT
+  ];
+
+  /**
+   * @param {string} mode
+   */
+  constructor(mode) {
+    if (!GitFileMode.isValid(mode)) {
+      throw new ValidationError(`Invalid Git file mode: ${mode}`, 'GitFileMode.constructor', { mode });
+    }
+    this._value = mode;
+  }
+
+  /**
+   * Validates if a string is a valid Git file mode
+   * @param {string} mode
+   * @returns {boolean}
+   */
+  static isValid(mode) {
+    return GitFileMode.VALID_MODES.includes(mode);
+  }
+
+  /**
+   * Returns the mode as a string
+   * @returns {string}
+   */
+  toString() {
+    return this._value;
+  }
+
+  /**
+   * Returns the corresponding GitObjectType
+   * @returns {GitObjectType}
+   */
+  getObjectType() {
+    if (this.isTree()) {
+      return GitObjectType.tree();
+    }
+    if (this._value === GitFileMode.COMMIT) {
+      return GitObjectType.commit();
+    }
+    return GitObjectType.blob();
+  }
+
+  /**
+   * Checks if this is a directory (tree)
+   * @returns {boolean}
+   */
+  isTree() {
+    return this._value === GitFileMode.TREE;
+  }
+
+  /**
+   * Checks if this is a regular file
+   * @returns {boolean}
+   */
+  isRegular() {
+    return this._value === GitFileMode.REGULAR;
+  }
+
+  /**
+   * Checks if this is an executable file
+   * @returns {boolean}
+   */
+  isExecutable() {
+    return this._value === GitFileMode.EXECUTABLE;
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/value-objects/GitObjectType.js
+/**
+ * @fileoverview GitObjectType value object - represents Git object types
+ */
+
+import InvalidGitObjectTypeError from '../errors/InvalidGitObjectTypeError.js';
+
+/**
+ * Represents a Git object type
+ */
+export default class GitObjectType {
+  static BLOB_INT = 1;
+  static TREE_INT = 2;
+  static COMMIT_INT = 3;
+  static TAG_INT = 4;
+  static OFS_DELTA_INT = 6;
+  static REF_DELTA_INT = 7;
+
+  static BLOB = 'blob';
+  static TREE = 'tree';
+  static COMMIT = 'commit';
+  static TAG = 'tag';
+  static OFS_DELTA = 'ofs-delta';
+  static REF_DELTA = 'ref-delta';
+
+  static TYPE_MAP = {
+    [GitObjectType.BLOB_INT]: GitObjectType.BLOB,
+    [GitObjectType.TREE_INT]: GitObjectType.TREE,
+    [GitObjectType.COMMIT_INT]: GitObjectType.COMMIT,
+    [GitObjectType.TAG_INT]: GitObjectType.TAG,
+    [GitObjectType.OFS_DELTA_INT]: GitObjectType.OFS_DELTA,
+    [GitObjectType.REF_DELTA_INT]: GitObjectType.REF_DELTA
+  };
+
+  static STRING_TO_INT = {
+    [GitObjectType.BLOB]: GitObjectType.BLOB_INT,
+    [GitObjectType.TREE]: GitObjectType.TREE_INT,
+    [GitObjectType.COMMIT]: GitObjectType.COMMIT_INT,
+    [GitObjectType.TAG]: GitObjectType.TAG_INT,
+    [GitObjectType.OFS_DELTA]: GitObjectType.OFS_DELTA_INT,
+    [GitObjectType.REF_DELTA]: GitObjectType.REF_DELTA_INT
+  };
+
+  /**
+   * @param {number} typeInt - The integer representation of the Git object type.
+   */
+  constructor(typeInt) {
+    if (GitObjectType.TYPE_MAP[typeInt] === undefined) {
+      throw new InvalidGitObjectTypeError(typeInt);
+    }
+    this._value = typeInt;
+  }
+
+  /**
+   * Creates a GitObjectType from a string name.
+   * @param {string} typeName - The string name (e.g., 'blob', 'tree').
+   * @returns {GitObjectType}
+   */
+  static fromString(typeName) {
+    const typeInt = GitObjectType.STRING_TO_INT[typeName];
+    if (typeInt === undefined) {
+      throw new InvalidGitObjectTypeError(typeName);
+    }
+    return new GitObjectType(typeInt);
+  }
+
+  /**
+   * Returns if the type is valid
+   * @param {number} typeInt
+   * @returns {boolean}
+   */
+  static isValid(typeInt) {
+    return GitObjectType.TYPE_MAP[typeInt] !== undefined;
+  }
+
+  /**
+   * Returns the integer representation
+   * @returns {number}
+   */
+  toNumber() {
+    return this._value;
+  }
+
+  /**
+   * Returns the string representation
+   * @returns {string}
+   */
+  toString() {
+    return GitObjectType.TYPE_MAP[this._value];
+  }
+
+  /**
+   * Returns the string representation (for JSON serialization)
+   * @returns {string}
+   */
+  toJSON() {
+    return this.toString();
+  }
+
+  /**
+   * Checks equality with another GitObjectType
+   * @param {GitObjectType} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    if (!(other instanceof GitObjectType)) {return false;}
+    return this._value === other._value;
+  }
+
+  /**
+   * Returns if this is a blob
+   * @returns {boolean}
+   */
+  isBlob() {
+    return this._value === GitObjectType.BLOB_INT;
+  }
+
+  /**
+   * Returns if this is a tree
+   * @returns {boolean}
+   */
+  isTree() {
+    return this._value === GitObjectType.TREE_INT;
+  }
+
+  /**
+   * Returns if this is a commit
+   * @returns {boolean}
+   */
+  isCommit() {
+    return this._value === GitObjectType.COMMIT_INT;
+  }
+
+  /**
+   * Returns if this is a tag
+   * @returns {boolean}
+   */
+  isTag() {
+    return this._value === GitObjectType.TAG_INT;
+  }
+
+  /**
+   * Static factory methods
+   */
+  static blob() { return new GitObjectType(GitObjectType.BLOB_INT); }
+  static tree() { return new GitObjectType(GitObjectType.TREE_INT); }
+  static commit() { return new GitObjectType(GitObjectType.COMMIT_INT); }
+  static tag() { return new GitObjectType(GitObjectType.TAG_INT); }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/value-objects/GitRef.js
+/**
+ * @fileoverview GitRef value object - immutable Git reference with validation
+ */
+
+import ValidationError from '../errors/ValidationError.js';
+import { GitRefSchema } from '../schemas/GitRefSchema.js';
+
+/**
+ * GitRef represents a Git reference with validation.
+ * References must be valid Git ref names.
+ */
+export default class GitRef {
+  static PREFIX_HEADS = 'refs/heads/';
+  static PREFIX_TAGS = 'refs/tags/';
+  static PREFIX_REMOTES = 'refs/remotes/';
+
+  /**
+   * @param {string} ref - The Git reference string
+   */
+  constructor(ref) {
+    const result = GitRefSchema.safeParse(ref);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid Git reference: ${ref}. Reason: ${result.error.errors[0].message}`,
+        'GitRef.constructor',
+        { ref, errors: result.error.errors }
+      );
+    }
+    this._value = result.data;
+  }
+
+  /**
+   * Validates if a string is a valid Git reference
+   * @param {string} ref
+   * @returns {boolean}
+   */
+  static isValid(ref) {
+    return GitRefSchema.safeParse(ref).success;
+  }
+
+  /**
+   * Creates a GitRef from a string, throwing if invalid
+   * @param {string} ref
+   * @returns {GitRef}
+   */
+  static fromString(ref) {
+    return new GitRef(ref);
+  }
+
+  /**
+   * Creates a GitRef from a string, returning null if invalid
+   * @param {string} ref
+   * @returns {GitRef|null}
+   */
+  static fromStringOrNull(ref) {
+    if (!this.isValid(ref)) { return null; }
+    return new GitRef(ref);
+  }
+
+  /**
+   * Returns the Git reference as a string
+   * @returns {string}
+   */
+  toString() {
+    return this._value;
+  }
+
+  /**
+   * Returns the Git reference as a string (for JSON serialization)
+   * @returns {string}
+   */
+  toJSON() {
+    return this._value;
+  }
+
+  /**
+   * Checks equality with another GitRef
+   * @param {GitRef} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    if (!(other instanceof GitRef)) { return false; }
+    return this._value === other._value;
+  }
+
+  /**
+   * Checks if this is a branch reference
+   * @returns {boolean}
+   */
+  isBranch() {
+    return this._value.startsWith(GitRef.PREFIX_HEADS);
+  }
+
+  /**
+   * Checks if this is a tag reference
+   * @returns {boolean}
+   */
+  isTag() {
+    return this._value.startsWith(GitRef.PREFIX_TAGS);
+  }
+
+  /**
+   * Checks if this is a remote reference
+   * @returns {boolean}
+   */
+  isRemote() {
+    return this._value.startsWith(GitRef.PREFIX_REMOTES);
+  }
+
+  /**
+   * Gets the short name of the reference (without refs/heads/ prefix)
+   * @returns {string}
+   */
+  shortName() {
+    if (this.isBranch()) {
+      return this._value.substring(GitRef.PREFIX_HEADS.length);
+    }
+    if (this.isTag()) {
+      return this._value.substring(GitRef.PREFIX_TAGS.length);
+    }
+    if (this.isRemote()) {
+      return this._value.substring(GitRef.PREFIX_REMOTES.length);
+    }
+    return this._value;
+  }
+
+  /**
+   * Creates a branch reference
+   * @param {string} name
+   * @returns {GitRef}
+   */
+  static branch(name) {
+    return new GitRef(`${GitRef.PREFIX_HEADS}${name}`);
+  }
+
+  /**
+   * Creates a tag reference
+   * @param {string} name
+   * @returns {GitRef}
+   */
+  static tag(name) {
+    return new GitRef(`${GitRef.PREFIX_TAGS}${name}`);
+  }
+
+  /**
+   * Creates a remote reference
+   * @param {string} remote
+   * @param {string} name
+   * @returns {GitRef}
+   */
+  static remote(remote, name) {
+    return new GitRef(`${GitRef.PREFIX_REMOTES}${remote}/${name}`);
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/domain/value-objects/GitSha.js
+/**
+ * @fileoverview GitSha value object - immutable SHA-1 hash with validation
+ */
+
+import ValidationError from '../errors/ValidationError.js';
+import { GitShaSchema } from '../schemas/GitShaSchema.js';
+
+/**
+ * GitSha represents a Git SHA-1 hash with validation.
+ * SHA-1 hashes are always 40 characters long and contain only hexadecimal characters.
+ */
+export default class GitSha {
+  static LENGTH = 40;
+  static SHORT_LENGTH = 7;
+  static EMPTY_TREE_VALUE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+  /**
+   * @param {string} sha - The SHA-1 hash string
+   */
+  constructor(sha) {
+    this._value = sha;
+  }
+
+  /**
+   * Creates a GitSha from a string, throwing if invalid.
+   * Consolidates validation into a single entry point.
+   * @param {string} sha
+   * @returns {GitSha}
+   * @throws {ValidationError}
+   */
+  static from(sha) {
+    const result = GitShaSchema.safeParse(sha);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid SHA-1 hash: "${sha}". Must be a 40-character hexadecimal string.`,
+        'GitSha.from',
+        { 
+          sha,
+          helpUrl: 'https://git-scm.com/book/en/v2/Git-Internals-Git-Objects'
+        }
+      );
+    }
+    return new GitSha(result.data);
+  }
+
+  /**
+   * Returns the SHA-1 hash as a string
+   * @returns {string}
+   */
+  toString() {
+    return this._value;
+  }
+
+  /**
+   * Returns the SHA-1 hash as a string (for JSON serialization)
+   * @returns {string}
+   */
+  toJSON() {
+    return this._value;
+  }
+
+  /**
+   * Checks equality with another GitSha
+   * @param {GitSha} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    if (!(other instanceof GitSha)) {return false;}
+    return this._value === other._value;
+  }
+
+  /**
+   * Returns the short form (first 7 characters) of the SHA
+   * @returns {string}
+   */
+  toShort() {
+    return this._value.substring(0, GitSha.SHORT_LENGTH);
+  }
+
+  /**
+   * Returns if this is the empty tree SHA
+   * @returns {boolean}
+   */
+  isEmptyTree() {
+    return this._value === GitSha.EMPTY_TREE_VALUE;
+  }
+
+  /**
+   * Empty tree SHA constant
+   * @returns {GitSha}
+   */
+  static get EMPTY_TREE() {
+    return new GitSha(GitSha.EMPTY_TREE_VALUE);
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/domain/value-objects/GitSignature.js
+/**
+ * @fileoverview GitSignature value object - represents author/committer information
+ */
+
+import ValidationError from '../errors/ValidationError.js';
+import { GitSignatureSchema } from '../schemas/GitSignatureSchema.js';
+
+/**
+ * Represents a Git signature (author or committer)
+ */
+export default class GitSignature {
+  /**
+   * @param {Object} data
+   * @param {string} data.name - Name of the person
+   * @param {string} data.email - Email of the person
+   * @param {number} [data.timestamp] - Unix timestamp (seconds)
+   */
+  constructor(data) {
+    const result = GitSignatureSchema.safeParse(data);
+    if (!result.success) {
+      throw new ValidationError(
+        `Invalid signature: ${result.error.errors[0].message}`,
+        'GitSignature.constructor',
+        { data, errors: result.error.errors }
+      );
+    }
+    
+    this.name = result.data.name;
+    this.email = result.data.email;
+    this.timestamp = result.data.timestamp;
+  }
+
+  /**
+   * Returns the signature in Git format: "Name <email> timestamp"
+   * @returns {string}
+   */
+  toString() {
+    return `${this.name} <${this.email}> ${this.timestamp}`;
+  }
+
+  /**
+   * Returns the JSON representation
+   * @returns {Object}
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      email: this.email,
+      timestamp: this.timestamp
+    };
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/infrastructure/GitStream.js
+/**
+ * @fileoverview Universal wrapper for Node.js and Web Streams
+ */
+
+import { DEFAULT_MAX_BUFFER_SIZE } from '../ports/RunnerOptionsSchema.js';
+
+/**
+ * GitStream provides a unified interface for consuming command output
+ * across Node.js, Bun, and Deno runtimes.
+ */
+export default class GitStream {
+  /**
+   * @param {ReadableStream|import('node:stream').Readable} stream
+   * @param {Promise<{code: number, stderr: string}>} [exitPromise]
+   */
+  constructor(stream, exitPromise = Promise.resolve({ code: 0, stderr: '' })) {
+    this._stream = stream;
+    this.finished = exitPromise;
+    this._consumed = false;
+  }
+
+  /**
+   * Returns a reader compatible with the Web Streams API.
+   * Favor native async iteration for Node.js streams to avoid manual listener management.
+   * @returns {{read: function(): Promise<{done: boolean, value: any}>, releaseLock: function(): void}}
+   */
+  getReader() {
+    if (typeof this._stream.getReader === 'function') {
+      return this._stream.getReader();
+    }
+
+    // Node.js stream adapter using async iterator
+    const it = this._stream[Symbol.asyncIterator]();
+
+    return {
+      read: async () => {
+        try {
+          const { done, value } = await it.next();
+          return { done, value };
+        } catch (err) {
+          /**
+           * Handle premature close in Node.js.
+           * This happens if the underlying process exits or is killed before the stream ends.
+           */
+          if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+            return { done: true, value: undefined };
+          }
+          throw err;
+        }
+      },
+      releaseLock: () => {}
+    };
+  }
+
+  /**
+   * Collects the entire stream into a Uint8Array or string, with a safety limit on bytes.
+   * Uses an array of chunks to avoid redundant allocations.
+   * @param {Object} options
+   * @param {number} [options.maxBytes=DEFAULT_MAX_BUFFER_SIZE]
+   * @param {boolean} [options.asString=false] - Whether to decode the final buffer to a string.
+   * @param {string} [options.encoding='utf-8'] - The encoding to use if asString is true.
+   * @returns {Promise<Uint8Array|string>}
+   * @throws {Error} If maxBytes is exceeded.
+   */
+  async collect({ maxBytes = DEFAULT_MAX_BUFFER_SIZE, asString = false, encoding = 'utf-8' } = {}) {
+    const chunks = [];
+    let totalBytes = 0;
+
+    try {
+      for await (const chunk of this) {
+        // Optimized: Check for Uint8Array to avoid redundant encoding
+        const bytes = chunk instanceof Uint8Array ? chunk : new TextEncoder().encode(String(chunk));
+        
+        if (totalBytes + bytes.length > maxBytes) {
+          throw new Error(`Buffer limit exceeded: ${maxBytes} bytes`);
+        }
+
+        chunks.push(bytes);
+        totalBytes += bytes.length;
+      }
+
+      const result = new Uint8Array(totalBytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        result.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      if (asString) {
+        return new TextDecoder(encoding).decode(result);
+      }
+
+      return result;
+    } finally {
+      await this.destroy();
+    }
+  }
+
+  /**
+   * Implements the Async Iterable protocol
+   */
+  async *[Symbol.asyncIterator]() {
+    if (this._consumed) {
+      throw new Error('Stream has already been consumed');
+    }
+    this._consumed = true;
+
+    try {
+      // Favor native async iterator if available (Node 10+, Deno, Bun)
+      if (typeof this._stream[Symbol.asyncIterator] === 'function') {
+        yield* this._stream;
+        return;
+      }
+
+      // Fallback to reader-based iteration
+      const reader = this.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          yield value;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    } finally {
+      await this.destroy();
+    }
+  }
+
+  /**
+   * Closes the underlying stream and releases resources.
+   * @returns {Promise<void>}
+   */
+  async destroy() {
+    try {
+      if (typeof this._stream.destroy === 'function') {
+        this._stream.destroy();
+      } else if (typeof this._stream.cancel === 'function') {
+        await this._stream.cancel();
+      }
+    } catch {
+      // Ignore errors during destruction
+    }
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/infrastructure/adapters/bun/BunShellRunner.js
+/**
+ * @fileoverview Bun implementation of the shell command runner (Streaming Only)
+ */
+
+import { RunnerResultSchema } from '../../../ports/RunnerResultSchema.js';
+import EnvironmentPolicy from '../../../domain/services/EnvironmentPolicy.js';
+
+/**
+ * Executes shell commands using Bun.spawn and always returns a stream.
+ */
+export default class BunShellRunner {
+  /**
+   * Executes a command
+   * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
+   */
+  async run({ command, args, cwd, input, timeout, env: envOverrides }) {
+    // Create a clean environment using Domain Policy
+    const baseEnv = EnvironmentPolicy.filter(globalThis.process?.env || {});
+    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
+
+    const process = Bun.spawn([command, ...args], {
+      cwd,
+      env,
+      stdin: 'pipe',
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    if (input) {
+      process.stdin.write(input);
+      process.stdin.end();
+    } else {
+      process.stdin.end();
+    }
+
+    const exitPromise = (async () => {
+      let timeoutId;
+      const timeoutPromise = timeout && timeout > 0
+        ? new Promise((resolve) => {
+            timeoutId = setTimeout(() => {
+              try { process.kill(); } catch { /* ignore */ }
+              resolve({ code: 1, stderr: 'Command timed out', timedOut: true });
+            }, timeout);
+          })
+        : null;
+
+      const completionPromise = (async () => {
+        const code = await process.exited;
+        const stderr = await new Response(process.stderr).text();
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        return { code, stderr, timedOut: false };
+      })();
+
+      if (!timeoutPromise) {
+        return completionPromise;
+      }
+
+      return Promise.race([completionPromise, timeoutPromise]);
+    })();
+
+    return RunnerResultSchema.parse({
+      stdoutStream: process.stdout,
+      exitPromise
+    });
+  }
+}
+
+
+# /Users/james/git/git-stunts/plumbing/src/infrastructure/adapters/deno/DenoShellRunner.js
+/**
+ * @fileoverview Deno implementation of the shell command runner (Streaming Only)
+ */
+
+import { RunnerResultSchema } from '../../../ports/RunnerResultSchema.js';
+import EnvironmentPolicy from '../../../domain/services/EnvironmentPolicy.js';
+
+const ENCODER = new TextEncoder();
+const DECODER = new TextDecoder();
+
+/**
+ * Executes shell commands using Deno.Command and always returns a stream.
+ */
+export default class DenoShellRunner {
+  /**
+   * Executes a command
+   * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
+   */
+  async run({ command, args, cwd, input, timeout, env: envOverrides }) {
+    // Create a clean environment using Domain Policy
+    const baseEnv = EnvironmentPolicy.filter(Deno.env.toObject());
+    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
+
+    const cmd = new Deno.Command(command, {
+      args,
+      cwd,
+      env,
+      stdin: 'piped', 
+      stdout: 'piped',
+      stderr: 'piped',
+    });
+
+    const child = cmd.spawn();
+
+    if (input && child.stdin) {
+      const writer = child.stdin.getWriter();
+      writer.write(typeof input === 'string' ? ENCODER.encode(input) : input);
+      await writer.close();
+    } else if (child.stdin) {
+      await child.stdin.close();
+    }
+
+    const stderrPromise = (async () => {
+      let stderr = '';
+      if (child.stderr) {
+        for await (const chunk of child.stderr) {
+          stderr += DECODER.decode(chunk);
+        }
+      }
+      return stderr;
+    })();
+
+    const exitPromise = (async () => {
+      let timeoutId;
+      const timeoutPromise = new Promise((resolve) => {
+        if (timeout) {
+          timeoutId = setTimeout(() => {
+            try { child.kill("SIGTERM"); } catch { /* ignore */ }
+            resolve({ code: 1, stderr: 'Command timed out', timedOut: true });
+          }, timeout);
+        }
+      });
+
+      const completionPromise = (async () => {
+        const { code } = await child.status;
+        const stderr = await stderrPromise;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        return { code, stderr, timedOut: false };
+      })();
+
+      return Promise.race([completionPromise, timeoutPromise]);
+    })();
+
+    return RunnerResultSchema.parse({
+      stdoutStream: child.stdout,
+      exitPromise
+    });
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/infrastructure/adapters/node/NodeShellRunner.js
+/**
+ * @fileoverview Node.js implementation of the shell command runner (Streaming Only)
+ */
+
+import { spawn } from 'node:child_process';
+import { RunnerResultSchema } from '../../../ports/RunnerResultSchema.js';
+import { DEFAULT_MAX_STDERR_SIZE } from '../../../ports/RunnerOptionsSchema.js';
+import EnvironmentPolicy from '../../../domain/services/EnvironmentPolicy.js';
+
+/**
+ * Executes shell commands using Node.js spawn and always returns a stream.
+ */
+export default class NodeShellRunner {
+  /**
+   * Executes a command
+   * @type {import('../../../ports/CommandRunnerPort.js').CommandRunner}
+   */
+  async run({ command, args, cwd, input, timeout, env: envOverrides }) {
+    // Create a clean environment using Domain Policy
+    const baseEnv = EnvironmentPolicy.filter(globalThis.process?.env || {});
+    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
+
+    const child = spawn(command, args, { cwd, env });
+
+    if (child.stdin) {
+      if (input) {
+        child.stdin.end(input);
+      } else {
+        child.stdin.end();
+      }
+    }
+
+    let stderr = '';
+    child.stderr?.on('data', (chunk) => {
+      if (stderr.length < DEFAULT_MAX_STDERR_SIZE) {
+        stderr += chunk.toString();
+      }
+    });
+
+    const exitPromise = new Promise((resolve) => {
+      let timeoutId;
+      if (typeof timeout === 'number' && timeout > 0) {
+        timeoutId = setTimeout(() => {
+          child.kill();
+          resolve({ code: 1, stderr, timedOut: true });
+        }, timeout);
+      }
+
+      child.on('exit', (code) => {
+        if (timeoutId) {clearTimeout(timeoutId);}
+        resolve({ code: code ?? 1, stderr, timedOut: false });
+      });
+
+      child.on('error', (err) => {
+        if (timeoutId) {clearTimeout(timeoutId);}
+        resolve({ code: 1, stderr: `${stderr}\n${err.message}`, timedOut: false, error: err });
+      });
+    });
+
+    return RunnerResultSchema.parse({
+      stdoutStream: child.stdout,
+      exitPromise
+    });
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/infrastructure/factories/ShellRunnerFactory.js
+/**
+ * @fileoverview Factory for creating shell runners based on the environment
+ */
+
+import NodeShellRunner from '../adapters/node/NodeShellRunner.js';
+import BunShellRunner from '../adapters/bun/BunShellRunner.js';
+import DenoShellRunner from '../adapters/deno/DenoShellRunner.js';
+
+/**
+ * Factory for shell runners
+ */
+export default class ShellRunnerFactory {
+  static ENV_BUN = 'bun';
+  static ENV_DENO = 'deno';
+  static ENV_NODE = 'node';
+
+  /** @private */
+  static _registry = new Map();
+
+  /**
+   * Registers a custom runner class.
+   * @param {string} name
+   * @param {Function} RunnerClass
+   */
+  static register(name, RunnerClass) {
+    this._registry.set(name, RunnerClass);
+  }
+
+  /**
+   * Creates a shell runner for the current environment
+   * @param {Object} [options]
+   * @param {string} [options.env] - Override environment detection.
+   * @returns {import('../../ports/CommandRunnerPort.js').CommandRunner} A functional shell runner
+   */
+  static create(options = {}) {
+    const env = options.env || this._detectEnvironment();
+    
+    // Check registry first
+    if (this._registry.has(env)) {
+      const RunnerClass = this._registry.get(env);
+      const runner = new RunnerClass();
+      return runner.run.bind(runner);
+    }
+
+    const runners = {
+      [this.ENV_BUN]: BunShellRunner,
+      [this.ENV_DENO]: DenoShellRunner,
+      [this.ENV_NODE]: NodeShellRunner
+    };
+
+    const RunnerClass = runners[env];
+    if (!RunnerClass) {
+      throw new Error(`Unsupported environment: ${env}`);
+    }
+
+    const runner = new RunnerClass();
+    return runner.run.bind(runner);
+  }
+
+  /**
+   * Resolves and validates a working directory using runtime-specific APIs.
+   * @param {string} cwd
+   * @returns {Promise<string>} The resolved absolute path.
+   */
+  static async validateCwd(cwd) {
+    const env = this._detectEnvironment();
+
+    if (env === this.ENV_NODE || env === this.ENV_BUN) {
+      const { resolve } = await import('node:path');
+      const { existsSync, statSync } = await import('node:fs');
+      const resolved = resolve(cwd);
+      if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+        throw new Error(`Invalid working directory: ${cwd}`);
+      }
+      return resolved;
+    }
+
+    if (env === this.ENV_DENO) {
+      try {
+        const resolved = await Deno.realPath(cwd);
+        const info = await Deno.stat(resolved);
+        if (!info.isDirectory) {
+          throw new Error('Not a directory');
+        }
+        return resolved;
+      } catch {
+        throw new Error(`Invalid working directory: ${cwd}`);
+      }
+    }
+
+    return cwd;
+  }
+
+  /**
+   * Detects the current execution environment
+   * @private
+   * @returns {string}
+   */
+  static _detectEnvironment() {
+    if (typeof globalThis.Bun !== 'undefined') {
+      return this.ENV_BUN;
+    }
+    if (typeof globalThis.Deno !== 'undefined') {
+      return this.ENV_DENO;
+    }
+    return this.ENV_NODE;
+  }
+}
+
+# /Users/james/git/git-stunts/plumbing/src/ports/CommandRunnerPort.js
+/**
+ * @fileoverview CommandRunner port definition
+ */
+
+import { DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_BUFFER_SIZE, DEFAULT_MAX_STDERR_SIZE } from './RunnerOptionsSchema.js';
+
+export { DEFAULT_COMMAND_TIMEOUT, DEFAULT_MAX_BUFFER_SIZE, DEFAULT_MAX_STDERR_SIZE };
+
+/**
+ * @typedef {import('./RunnerOptionsSchema.js').RunnerOptions} RunnerOptions
+ * @typedef {import('./RunnerResultSchema.js').RunnerResult} RunnerResult
+ */
+
+/**
+ * @callback CommandRunner
+ * @param {RunnerOptions} options
+ * @returns {Promise<RunnerResult>}
+ */
+
+
+# /Users/james/git/git-stunts/plumbing/src/ports/GitPersistencePort.js
+/**
+ * @fileoverview GitPersistencePort - Functional port for Git object persistence
+ */
+
+/**
+ * @typedef {Object} GitPersistencePort
+ * @property {function(import('../domain/entities/GitBlob.js').default): Promise<import('../domain/value-objects/GitSha.js').default>} writeBlob
+ * @property {function(import('../domain/entities/GitTree.js').default): Promise<import('../domain/value-objects/GitSha.js').default>} writeTree
+ * @property {function(import('../domain/entities/GitCommit.js').default): Promise<import('../domain/value-objects/GitSha.js').default>} writeCommit
+ */
+
+
+# /Users/james/git/git-stunts/plumbing/src/ports/RunnerOptionsSchema.js
+import { z } from 'zod';
+
+/**
+ * Default timeout for shell commands in milliseconds.
+ */
+export const DEFAULT_COMMAND_TIMEOUT = 120000;
+
+/**
+ * Default maximum size for command output buffer in bytes (10MB).
+ */
+export const DEFAULT_MAX_BUFFER_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Default maximum size for stderr buffer in bytes (1MB).
+ */
+export const DEFAULT_MAX_STDERR_SIZE = 1024 * 1024;
+
+/**
+ * Zod schema for CommandRunner options.
+ */
+export const RunnerOptionsSchema = z.object({
+  command: z.string(),
+  args: z.array(z.string()),
+  cwd: z.string().optional(),
+  input: z.union([z.string(), z.instanceof(Uint8Array)]).optional(),
+  env: z.record(z.string()).optional(),
+  timeout: z.number().optional().default(DEFAULT_COMMAND_TIMEOUT),
+});
+
+/**
+ * @typedef {z.infer<typeof RunnerOptionsSchema>} RunnerOptions
+ */
+
+
+# /Users/james/git/git-stunts/plumbing/src/ports/RunnerResultSchema.js
+import { z } from 'zod';
+
+/**
+ * Zod schema for the result returned by a CommandRunner.
+ */
+export const RunnerResultSchema = z.object({
+  stdoutStream: z.any(), // ReadableStream (Web) or Readable (Node)
+  exitPromise: z.instanceof(Promise), // Resolves to {code, stderr} when process ends
+});
+
+/**
+ * @typedef {z.infer<typeof RunnerResultSchema>} RunnerResult
+ */
+
+

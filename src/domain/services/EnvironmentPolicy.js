@@ -17,8 +17,6 @@ export default class EnvironmentPolicy {
    */
   static _ALLOWED_KEYS = [
     'PATH',
-    'GIT_EXEC_PATH',
-    'GIT_TEMPLATE_DIR',
     'GIT_CONFIG_NOSYSTEM',
     'GIT_ATTR_NOSYSTEM',
     // Identity
@@ -42,7 +40,9 @@ export default class EnvironmentPolicy {
    * @private
    */
   static _BLOCKED_KEYS = [
-    'GIT_CONFIG_PARAMETERS'
+    'GIT_CONFIG_PARAMETERS',
+    'GIT_EXEC_PATH',
+    'GIT_TEMPLATE_DIR'
   ];
 
   /**

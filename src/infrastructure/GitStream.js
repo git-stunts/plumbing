@@ -4,6 +4,8 @@
 
 import { DEFAULT_MAX_BUFFER_SIZE } from '../ports/RunnerOptionsSchema.js';
 
+const ENCODER = new TextEncoder();
+
 /**
  * GitStream provides a unified interface for consuming command output
  * across Node.js, Bun, and Deno runtimes.
@@ -17,6 +19,7 @@ export default class GitStream {
     this._stream = stream;
     this.finished = exitPromise;
     this._consumed = false;
+    this._destroyed = false;
   }
 
   /**
@@ -69,7 +72,7 @@ export default class GitStream {
     try {
       for await (const chunk of this) {
         // Optimized: Check for Uint8Array to avoid redundant encoding
-        const bytes = chunk instanceof Uint8Array ? chunk : new TextEncoder().encode(String(chunk));
+        const bytes = chunk instanceof Uint8Array ? chunk : ENCODER.encode(String(chunk));
         
         if (totalBytes + bytes.length > maxBytes) {
           throw new Error(`Buffer limit exceeded: ${maxBytes} bytes`);
@@ -135,6 +138,9 @@ export default class GitStream {
    * @returns {Promise<void>}
    */
   async destroy() {
+    if (this._destroyed) {return;}
+    this._destroyed = true;
+
     try {
       if (typeof this._stream.destroy === 'function') {
         this._stream.destroy();

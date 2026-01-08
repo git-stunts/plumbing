@@ -38,7 +38,6 @@ export default class GitCommandBuilder {
   static lsFiles() { return new GitCommandBuilder('ls-files'); }
   static checkIgnore() { return new GitCommandBuilder('check-ignore'); }
   static checkAttr() { return new GitCommandBuilder('check-attr'); }
-  static version() { return new GitCommandBuilder('--version'); }
   static init() { return new GitCommandBuilder('init'); }
   static config() { return new GitCommandBuilder('config'); }
 
@@ -100,7 +99,7 @@ export default class GitCommandBuilder {
   }
 
   /**
-   * Adds the -p flag (parent) - Note: shared with pretty-print in some commands
+   * Adds the -p flag (parent)
    * @param {string} sha
    * @returns {GitCommandBuilder}
    */
