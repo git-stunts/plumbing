@@ -26,7 +26,7 @@ A low-level, robust, and environment-agnostic Git plumbing library for the moder
 
 - **System Git**: Requires Git >= 2.30.0.
 - **Runtimes**:
-    - **Node.js**: >= 22.0.0
+    - **Node.js**: >= 20.0.0
     - **Bun**: >= 1.3.5
     - **Deno**: >= 2.0.0
 
