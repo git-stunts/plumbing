@@ -28,13 +28,6 @@ export default [
     languageOptions: {
       globals: {
         ...globals.jest,
-        describe: 'readonly',
-        it: 'readonly',
-        expect: 'readonly',
-        beforeEach: 'readonly',
-        afterEach: 'readonly',
-        beforeAll: 'readonly',
-        afterAll: 'readonly',
         fail: 'readonly'
       }
     }

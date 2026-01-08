@@ -2,8 +2,6 @@
  * @fileoverview GitPlumbing - The primary domain service for Git plumbing operations
  */
 
-import path from 'node:path';
-import fs from 'node:fs';
 import { RunnerOptionsSchema, DEFAULT_MAX_BUFFER_SIZE } from './src/ports/RunnerOptionsSchema.js';
 
 // Value Objects
@@ -56,24 +54,32 @@ export default class GitPlumbing {
   /**
    * @param {Object} options
    * @param {import('./src/ports/CommandRunnerPort.js').CommandRunner} options.runner - The functional port for shell execution.
-   * @param {string} [options.cwd=process.cwd()] - The working directory for git operations.
+   * @param {string} [options.cwd='.'] - The working directory for git operations.
    * @param {CommandSanitizer} [options.sanitizer] - Injected sanitizer.
    * @param {ExecutionOrchestrator} [options.orchestrator] - Injected orchestrator.
+   * @param {Object} [options.fsAdapter] - Optional filesystem adapter for CWD validation.
    */
   constructor({ 
     runner, 
-    cwd = process.cwd(),
+    cwd = '.',
     sanitizer = new CommandSanitizer(),
-    orchestrator = new ExecutionOrchestrator()
+    orchestrator = new ExecutionOrchestrator(),
+    fsAdapter = null
   }) {
     if (typeof runner !== 'function') {
       throw new InvalidArgumentError('A functional runner port is required for GitPlumbing', 'GitPlumbing.constructor');
     }
     
-    // Validate CWD
-    const resolvedCwd = path.resolve(cwd);
-    if (!fs.existsSync(resolvedCwd) || !fs.statSync(resolvedCwd).isDirectory()) {
-      throw new InvalidArgumentError(`Invalid working directory: ${cwd}`, 'GitPlumbing.constructor', { cwd });
+    let resolvedCwd = cwd;
+    if (fsAdapter) {
+      try {
+        resolvedCwd = fsAdapter.resolve(cwd);
+        if (typeof fsAdapter.isDirectory === 'function' && !fsAdapter.isDirectory(resolvedCwd)) {
+          throw new Error('Not a directory');
+        }
+      } catch (err) {
+        throw new InvalidArgumentError(`Invalid working directory: ${cwd}`, 'GitPlumbing.constructor', { cwd, error: err.message });
+      }
     }
 
     /** @private */

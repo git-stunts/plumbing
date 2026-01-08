@@ -107,10 +107,10 @@ export default class GitPersistenceService {
     const env = EnvironmentPolicy.filter({
       GIT_AUTHOR_NAME: commit.author.name,
       GIT_AUTHOR_EMAIL: commit.author.email,
-      GIT_AUTHOR_DATE: commit.author.timestamp.toString(),
+      GIT_AUTHOR_DATE: `${commit.author.timestamp} +0000`,
       GIT_COMMITTER_NAME: commit.committer.name,
       GIT_COMMITTER_EMAIL: commit.committer.email,
-      GIT_COMMITTER_DATE: commit.committer.timestamp.toString()
+      GIT_COMMITTER_DATE: `${commit.committer.timestamp} +0000`
     });
     
     const shaStr = await this.plumbing.execute({ args, env });

@@ -58,15 +58,49 @@ export default class ShellRunnerFactory {
   }
 
   /**
+   * Resolves and validates a working directory using runtime-specific APIs.
+   * @param {string} cwd
+   * @returns {Promise<string>} The resolved absolute path.
+   */
+  static async validateCwd(cwd) {
+    const env = this._detectEnvironment();
+
+    if (env === this.ENV_NODE || env === this.ENV_BUN) {
+      const { resolve } = await import('node:path');
+      const { existsSync, statSync } = await import('node:fs');
+      const resolved = resolve(cwd);
+      if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+        throw new Error(`Invalid working directory: ${cwd}`);
+      }
+      return resolved;
+    }
+
+    if (env === this.ENV_DENO) {
+      try {
+        const resolved = await Deno.realPath(cwd);
+        const info = await Deno.stat(resolved);
+        if (!info.isDirectory) {
+          throw new Error('Not a directory');
+        }
+        return resolved;
+      } catch {
+        throw new Error(`Invalid working directory: ${cwd}`);
+      }
+    }
+
+    return cwd;
+  }
+
+  /**
    * Detects the current execution environment
    * @private
    * @returns {string}
    */
   static _detectEnvironment() {
-    if (typeof Bun !== 'undefined') {
+    if (typeof globalThis.Bun !== 'undefined') {
       return this.ENV_BUN;
     }
-    if (typeof Deno !== 'undefined') {
+    if (typeof globalThis.Deno !== 'undefined') {
       return this.ENV_DENO;
     }
     return this.ENV_NODE;

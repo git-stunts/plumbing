@@ -23,7 +23,7 @@ describe('GitTree', () => {
     expect(format).toBe(`100644 blob ${VALID_SHA}\tfile.txt\n040000 tree ${EMPTY_TREE_SHA}\tsubdir\n`);
   });
 
-  it('returns empty string for empty tree mktree format', () => {
+  it('returns single newline for empty tree mktree format', () => {
     const tree = new GitTree(null, []);
     expect(tree.toMktreeFormat()).toBe('\n');
   });
