@@ -54,13 +54,143 @@ describe('CommandSanitizer', () => {
 
   it('handles cache eviction', () => {
     const smallSanitizer = new CommandSanitizer({ maxCacheSize: 2 });
-    
+
     const args1 = ['rev-parse', 'HEAD'];
     const args2 = ['cat-file', '-p', '4b825dc642cb6eb9a060e54bf8d69288fbee4904'];
     const args3 = ['ls-tree', 'HEAD'];
-    
+
     smallSanitizer.sanitize(args1);
     smallSanitizer.sanitize(args2);
     smallSanitizer.sanitize(args3);
+  });
+
+  describe('Per-command flag allowlists', () => {
+    describe('show command', () => {
+      it('allows whitelisted flags for show', () => {
+        expect(() => sanitizer.sanitize(['show', '--format=%B', '-s', 'HEAD'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['show', '--pretty=oneline', 'HEAD'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['show', '--no-patch', 'HEAD'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['show', '--quiet', 'HEAD'])).not.toThrow();
+      });
+
+      it('rejects non-whitelisted flags for show', () => {
+        expect(() => sanitizer.sanitize(['show', '--diff-filter=A', 'HEAD'])).toThrow(ProhibitedFlagError);
+        expect(() => sanitizer.sanitize(['show', '--follow', 'HEAD'])).toThrow(ProhibitedFlagError);
+        expect(() => sanitizer.sanitize(['show', '-p', 'HEAD'])).toThrow(ProhibitedFlagError);
+      });
+
+      it('allows show with no ref (defaults to HEAD)', () => {
+        expect(() => sanitizer.sanitize(['show'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['show', '--format=%B'])).not.toThrow();
+      });
+    });
+
+    describe('log command', () => {
+      it('allows whitelisted flags for log', () => {
+        expect(() => sanitizer.sanitize(['log', '--format=%H', '-z', 'HEAD'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['log', '-n', '10', 'HEAD'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['log', '--max-count=50', 'HEAD'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['log', '--oneline', 'HEAD'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['log', '--first-parent', 'HEAD'])).not.toThrow();
+      });
+
+      it('rejects non-whitelisted flags for log', () => {
+        expect(() => sanitizer.sanitize(['log', '--diff-filter=M', 'HEAD'])).toThrow(ProhibitedFlagError);
+        expect(() => sanitizer.sanitize(['log', '--follow', 'HEAD'])).toThrow(ProhibitedFlagError);
+        expect(() => sanitizer.sanitize(['log', '-p', 'HEAD'])).toThrow(ProhibitedFlagError);
+      });
+
+      it('allows log with no arguments', () => {
+        expect(() => sanitizer.sanitize(['log'])).not.toThrow();
+      });
+    });
+
+    describe('other commands have no additional restrictions', () => {
+      it('allows any flags for rev-parse', () => {
+        expect(() => sanitizer.sanitize(['rev-parse', '--show-toplevel'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['rev-parse', '--abbrev-ref', 'HEAD'])).not.toThrow();
+      });
+
+      it('allows any flags for cat-file', () => {
+        expect(() => sanitizer.sanitize(['cat-file', '-p', 'HEAD'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['cat-file', '-t', 'HEAD'])).not.toThrow();
+      });
+    });
+  });
+
+  describe('Argument injection protection (spawn safety)', () => {
+    it('safely handles shell metacharacters in flag values', () => {
+      // spawn() passes args directly - no shell parsing
+      expect(() => sanitizer.sanitize(['log', '--format=%; rm -rf /', 'HEAD'])).not.toThrow();
+      expect(() => sanitizer.sanitize(['log', '--author=foo; cat /etc/passwd', 'HEAD'])).not.toThrow();
+    });
+
+    it('safely handles backticks in arguments', () => {
+      expect(() => sanitizer.sanitize(['log', '--format=`whoami`', 'HEAD'])).not.toThrow();
+    });
+
+    it('safely handles $() command substitution in arguments', () => {
+      expect(() => sanitizer.sanitize(['log', '--format=$(id)', 'HEAD'])).not.toThrow();
+    });
+
+    it('safely handles pipe characters in arguments', () => {
+      expect(() => sanitizer.sanitize(['log', '--format=%s | malicious', 'HEAD'])).not.toThrow();
+    });
+
+    it('safely handles newlines in arguments', () => {
+      expect(() => sanitizer.sanitize(['log', '--format=%s\n%b', 'HEAD'])).not.toThrow();
+    });
+
+    it('safely handles quotes in arguments', () => {
+      expect(() => sanitizer.sanitize(['log', '--author="John Doe"', 'HEAD'])).not.toThrow();
+      expect(() => sanitizer.sanitize(['log', "--author='Jane Doe'", 'HEAD'])).not.toThrow();
+    });
+  });
+
+  describe('NUL-terminated output (log -z)', () => {
+    it('allows log with -z flag', () => {
+      expect(() => sanitizer.sanitize(['log', '-z', '--format=%H', 'HEAD'])).not.toThrow();
+    });
+
+    it('allows log with -z and multiple format specifiers', () => {
+      expect(() => sanitizer.sanitize(['log', '-z', '--format=%H%x00%s%x00%b'])).not.toThrow();
+    });
+
+    it('allows log with -z combined with -n', () => {
+      expect(() => sanitizer.sanitize(['log', '-z', '-n', '10', 'HEAD'])).not.toThrow();
+    });
+
+    it('allows log with -z and --max-count', () => {
+      expect(() => sanitizer.sanitize(['log', '-z', '--max-count=50', 'main..HEAD'])).not.toThrow();
+    });
+
+    it('allows log with -z and ancestry path traversal', () => {
+      expect(() => sanitizer.sanitize(['log', '-z', '--ancestry-path', '--format=%H', 'main..HEAD'])).not.toThrow();
+    });
+
+    it('allows log with -z and first-parent for linear history', () => {
+      expect(() => sanitizer.sanitize(['log', '-z', '--first-parent', '--format=%H%x00%P', 'HEAD'])).not.toThrow();
+    });
+
+    it('allows log with -z and reverse for chronological order', () => {
+      expect(() => sanitizer.sanitize(['log', '-z', '--reverse', '--format=%H', 'HEAD~10..HEAD'])).not.toThrow();
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('throws for empty array', () => {
+      expect(() => sanitizer.sanitize([])).toThrow(ValidationError);
+    });
+
+    it('allows commands with only the command name (no flags or refs)', () => {
+      expect(() => sanitizer.sanitize(['show'])).not.toThrow();
+      expect(() => sanitizer.sanitize(['log'])).not.toThrow();
+      expect(() => sanitizer.sanitize(['rev-parse'])).not.toThrow();
+    });
+
+    it('handles flags with = values correctly', () => {
+      expect(() => sanitizer.sanitize(['log', '--format=%H'])).not.toThrow();
+      expect(() => sanitizer.sanitize(['log', '--max-count=10'])).not.toThrow();
+    });
   });
 });

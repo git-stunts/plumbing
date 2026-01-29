@@ -74,6 +74,67 @@ export default class CommandSanitizer {
   ];
 
   /**
+   * Per-command flag allowlists for commands with restricted flag sets.
+   * Only flags listed here are permitted for these commands.
+   * Commands not in this map have no additional restrictions beyond global prohibitions.
+   * @private
+   */
+  static _COMMAND_FLAG_ALLOWLISTS = {
+    'show': new Set([
+      '--format', '--pretty', '-s', '--no-patch', '--quiet', '-q',
+      '--name-only', '--name-status', '--stat', '--numstat', '--shortstat',
+      '--oneline', '--abbrev-commit', '--no-abbrev-commit', '--date', '--no-notes'
+    ]),
+    'log': new Set([
+      '--format', '--pretty', '-z', '--oneline',
+      '-n', '--max-count', '-1', '-2', '-3', '-4', '-5', '-10', '-20', '-50', '-100',
+      '--skip', '--since', '--until', '--after', '--before',
+      '--author', '--committer', '--grep', '--all-match', '--invert-grep',
+      '--regexp-ignore-case', '-i', '-E', '-F', '-P',
+      '--ancestry-path', '--first-parent', '--no-merges', '--merges',
+      '--reverse', '--date-order', '--author-date-order', '--topo-order',
+      '--abbrev-commit', '--no-abbrev-commit', '--abbrev', '--date',
+      '--relative-date', '--parents', '--children', '--left-right',
+      '--graph', '--decorate', '--no-decorate', '--source',
+      '--no-walk', '--stdin', '--cherry', '--cherry-pick', '--cherry-mark',
+      '--boundary', '--simplify-by-decoration'
+    ])
+  };
+
+  /**
+   * Validates command-specific flags against the allowlist.
+   * @param {string} command - The git subcommand (e.g., 'show', 'log')
+   * @param {string[]} args - All arguments including flags
+   * @param {number} commandIndex - Index of the command in args array
+   * @throws {ProhibitedFlagError} If a flag is not in the allowlist
+   * @private
+   */
+  static _validateCommandFlags(command, args, commandIndex) {
+    const allowlist = CommandSanitizer._COMMAND_FLAG_ALLOWLISTS[command];
+    if (!allowlist) {
+      return; // No allowlist = no additional restrictions
+    }
+
+    for (let i = commandIndex + 1; i < args.length; i++) {
+      const arg = args[i];
+
+      // Skip non-flag arguments (refs, paths, etc.)
+      if (!arg.startsWith('-')) {
+        continue;
+      }
+
+      // Handle --flag=value format: extract just the flag portion
+      const flagPart = arg.includes('=') ? arg.split('=')[0] : arg;
+
+      if (!allowlist.has(flagPart)) {
+        throw new ProhibitedFlagError(arg, 'CommandSanitizer.sanitize', {
+          message: `Flag '${flagPart}' is not allowed for '${command}' command`
+        });
+      }
+    }
+  }
+
+  /**
    * Dynamically allows a command.
    * @param {string} commandName
    */
@@ -158,6 +219,9 @@ export default class CommandSanitizer {
     if (!CommandSanitizer._ALLOWED_COMMANDS.has(command)) {
       throw new ValidationError(`Prohibited git command detected: ${command}`, 'CommandSanitizer.sanitize', { command });
     }
+
+    // Validate per-command flag allowlists
+    CommandSanitizer._validateCommandFlags(command, args, subcommandIndex !== -1 ? subcommandIndex : 0);
 
     let totalLength = 0;
     for (const arg of args) {
