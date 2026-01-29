@@ -43,7 +43,8 @@ export default class CommandSanitizer {
     'check-attr',
     'init',
     'config',
-    'log'
+    'log',
+    'show'
   ]);
 
   /**

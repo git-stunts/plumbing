@@ -13,6 +13,14 @@ describe('CommandSanitizer', () => {
     expect(() => sanitizer.sanitize(['rev-parse', 'HEAD'])).not.toThrow();
   });
 
+  it('allows log command for commit history traversal', () => {
+    expect(() => sanitizer.sanitize(['log', '--format=%H', '-z', 'HEAD'])).not.toThrow();
+  });
+
+  it('allows show command for reading commit messages', () => {
+    expect(() => sanitizer.sanitize(['show', '--format=%B', '-s', 'HEAD'])).not.toThrow();
+  });
+
   it('throws ValidationError for unlisted commands', () => {
     expect(() => sanitizer.sanitize(['push', 'origin', 'main'])).toThrow(ValidationError);
   });
