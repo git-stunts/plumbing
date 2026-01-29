@@ -129,6 +129,14 @@ export default class CommandSanitizer {
         continue;
       }
 
+      // Handle numeric short forms: -n10, -15 (equivalent to -n 10, -n 15)
+      // These are valid for commands like 'log' that have -n in their allowlist
+      if (/^-n?\d+$/.test(arg)) {
+        if (allowlist.has('-n')) {
+          continue; // Numeric form allowed if -n is in allowlist
+        }
+      }
+
       // Handle --flag=value format: extract just the flag portion
       const flagPart = arg.includes('=') ? arg.split('=')[0] : arg;
 

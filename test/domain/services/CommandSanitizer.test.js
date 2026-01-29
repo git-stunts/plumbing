@@ -103,6 +103,16 @@ describe('CommandSanitizer', () => {
       it('allows log with no arguments', () => {
         expect(() => sanitizer.sanitize(['log'])).not.toThrow();
       });
+
+      it('allows combined numeric short forms (-n10, -15)', () => {
+        // -n10 is equivalent to -n 10
+        expect(() => sanitizer.sanitize(['log', '-n10', 'HEAD'])).not.toThrow();
+        // -15 is equivalent to -n 15 (git shorthand)
+        expect(() => sanitizer.sanitize(['log', '-15', 'HEAD'])).not.toThrow();
+        // Combined with other flags
+        expect(() => sanitizer.sanitize(['log', '-n5', '--format=%H', 'HEAD'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['log', '-3', '--oneline'])).not.toThrow();
+      });
     });
 
     describe('other commands have no additional restrictions', () => {
