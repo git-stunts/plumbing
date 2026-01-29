@@ -118,6 +118,12 @@ export default class CommandSanitizer {
     for (let i = commandIndex + 1; i < args.length; i++) {
       const arg = args[i];
 
+      // Stop flag validation at end-of-options marker
+      // Everything after '--' is a pathspec or ref, not a flag
+      if (arg === '--') {
+        break;
+      }
+
       // Skip non-flag arguments (refs, paths, etc.)
       if (!arg.startsWith('-')) {
         continue;

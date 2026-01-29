@@ -192,5 +192,13 @@ describe('CommandSanitizer', () => {
       expect(() => sanitizer.sanitize(['log', '--format=%H'])).not.toThrow();
       expect(() => sanitizer.sanitize(['log', '--max-count=10'])).not.toThrow();
     });
+
+    it('stops flag validation at end-of-options marker (--)', () => {
+      // Args after '--' are pathspecs/refs, not flags - should not be validated
+      expect(() => sanitizer.sanitize(['show', '--format=%B', '--', '-weird-ref-name'])).not.toThrow();
+      expect(() => sanitizer.sanitize(['log', '--oneline', '--', '--not-a-flag'])).not.toThrow();
+      // Disallowed flag BEFORE '--' should still throw
+      expect(() => sanitizer.sanitize(['show', '-p', '--', 'file.txt'])).toThrow(ProhibitedFlagError);
+    });
   });
 });
