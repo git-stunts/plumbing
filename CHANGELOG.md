@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-05-06
+
+### Added
+- **Asynchronous Initialization**: Refactored `GitPlumbing` and `GitRepositoryService` factories to be `async`, ensuring non-blocking environment validation and path resolution.
+- **Async CWD Validation**: `ShellRunnerFactory.validateCwd` now uses asynchronous filesystem operations (`stat` vs `statSync`).
+- **Industrial Documentation**: Rewrote `README.md` and added `GUIDE.md` and `ADVANCED_GUIDE.md` to provide comprehensive pedagogical and technical coverage.
+
+### Changed
+- **Breaking: Constructor Signature**: Removed `fsAdapter` and synchronous path resolution from the `GitPlumbing` constructor. Path resolution must now be handled via `createDefault` or `createRepository`.
+- **Breaking: Factory Return Types**: `GitPlumbing.createDefault`, `GitPlumbing.createRepository`, and `ShellRunnerFactory.validateCwd` now return `Promise` instances.
+
+### Removed
+- **Synchronous Path Resolution**: Eliminated `fs.existsSync` and `fs.statSync` from the core initialization path to ensure event-loop friendliness across all runtimes.
+
 ## [Unreleased] - 2026-01-08
 
 ### Added

@@ -19,7 +19,7 @@ describe('GitPersistenceService', () => {
     repoPath = path.join(os.tmpdir(), `git-persistence-test-${Math.random().toString(36).substring(7)}`);
     fs.mkdirSync(repoPath, { recursive: true });
     
-    git = GitPlumbing.createDefault({ cwd: repoPath });
+    git = await GitPlumbing.createDefault({ cwd: repoPath });
     persistence = new GitPersistenceService({ plumbing: git });
     
     await git.execute({ args: ['init'] });

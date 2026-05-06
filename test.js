@@ -20,7 +20,7 @@ describe('GitPlumbing', () => {
 
   beforeEach(async () => {
     tempDir = mkdtempSync(path.join(os.tmpdir(), 'git-plumbing-test-'));
-    plumbing = new GitPlumbing({ cwd: tempDir });
+    plumbing = await GitPlumbing.createDefault({ cwd: tempDir });
     repo = new GitRepositoryService({ plumbing });
     // Initialize a repo for testing
     await plumbing.execute({ args: ['init'] });

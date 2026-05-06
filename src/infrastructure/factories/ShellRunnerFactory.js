@@ -67,12 +67,17 @@ export default class ShellRunnerFactory {
 
     if (env === this.ENV_NODE || env === this.ENV_BUN) {
       const { resolve } = await import('node:path');
-      const { existsSync, statSync } = await import('node:fs');
+      const { stat } = await import('node:fs/promises');
       const resolved = resolve(cwd);
-      if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+      try {
+        const stats = await stat(resolved);
+        if (!stats.isDirectory()) {
+          throw new Error('Not a directory');
+        }
+        return resolved;
+      } catch {
         throw new Error(`Invalid working directory: ${cwd}`);
       }
-      return resolved;
     }
 
     if (env === this.ENV_DENO) {

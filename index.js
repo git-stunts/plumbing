@@ -63,29 +63,16 @@ export default class GitPlumbing {
     runner, 
     cwd = '.',
     sanitizer = new CommandSanitizer(),
-    orchestrator = new ExecutionOrchestrator(),
-    fsAdapter = null
+    orchestrator = new ExecutionOrchestrator()
   }) {
     if (typeof runner !== 'function') {
       throw new InvalidArgumentError('A functional runner port is required for GitPlumbing', 'GitPlumbing.constructor');
-    }
-    
-    let resolvedCwd = cwd;
-    if (fsAdapter) {
-      try {
-        resolvedCwd = fsAdapter.resolve(cwd);
-        if (typeof fsAdapter.isDirectory === 'function' && !fsAdapter.isDirectory(resolvedCwd)) {
-          throw new Error('Not a directory');
-        }
-      } catch (err) {
-        throw new InvalidArgumentError(`Invalid working directory: ${cwd}`, 'GitPlumbing.constructor', { cwd, error: err.message });
-      }
     }
 
     /** @private */
     this.runner = runner;
     /** @private */
-    this.cwd = resolvedCwd;
+    this.cwd = cwd;
     /** @private */
     this.sanitizer = sanitizer;
     /** @private */
@@ -112,23 +99,25 @@ export default class GitPlumbing {
    * @param {string} [options.env] - Override environment detection.
    * @param {CommandSanitizer} [options.sanitizer]
    * @param {ExecutionOrchestrator} [options.orchestrator]
-   * @returns {GitPlumbing}
+   * @returns {Promise<GitPlumbing>}
    */
-  static createDefault(options = {}) {
+  static async createDefault(options = {}) {
     const env = options.env || globalThis.process?.env?.GIT_PLUMBING_ENV;
+    const cwd = options.cwd ? await ShellRunnerFactory.validateCwd(options.cwd) : '.';
     return new GitPlumbing({
       runner: ShellRunnerFactory.create({ env }),
-      ...options
+      ...options,
+      cwd
     });
   }
 
   /**
    * Factory method to create a high-level GitRepositoryService.
    * @param {Object} [options]
-   * @returns {GitRepositoryService}
+   * @returns {Promise<GitRepositoryService>}
    */
-  static createRepository(options = {}) {
-    const plumbing = GitPlumbing.createDefault(options);
+  static async createRepository(options = {}) {
+    const plumbing = await GitPlumbing.createDefault(options);
     return new GitRepositoryService({ plumbing });
   }
 

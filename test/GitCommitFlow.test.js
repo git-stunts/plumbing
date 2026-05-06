@@ -13,7 +13,7 @@ describe('Git Commit Flow', () => {
     repoPath = path.join(os.tmpdir(), `git-plumbing-test-${Math.random().toString(36).substring(7)}`);
     fs.mkdirSync(repoPath, { recursive: true });
     
-    git = GitPlumbing.createDefault({ cwd: repoPath });
+    git = await GitPlumbing.createDefault({ cwd: repoPath });
     
     // Initialize repository
     await git.execute({ args: ['init'] });
