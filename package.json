@@ -4,6 +4,9 @@
   "description": "Robust async, stream-first Git plumbing for Node, Bun, and Deno.",
   "type": "module",
   "main": "index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": "./index.js",
     "./ShellRunner": "./ShellRunner.js",
