@@ -32,7 +32,6 @@ jobs:
     needs: test
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    environment: npm-publish
     permissions:
       contents: write # Required for creating releases
       id-token: write # Required for provenance
