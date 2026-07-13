@@ -44,7 +44,8 @@ export default class CommandSanitizer {
     'init',
     'config',
     'log',
-    'show'
+    'show',
+    'prune'
   ]);
 
   /**
@@ -98,8 +99,34 @@ export default class CommandSanitizer {
       '--graph', '--decorate', '--no-decorate', '--source',
       '--no-walk', '--stdin', '--cherry', '--cherry-pick', '--cherry-mark',
       '--boundary', '--simplify-by-decoration'
+    ]),
+    'prune': new Set([
+      '--dry-run', '-n', '--verbose', '-v', '--expire'
     ])
   };
+
+  /**
+   * Enforces command-level safety requirements that a flag allowlist cannot
+   * express by itself.
+   * @param {string} command
+   * @param {string[]} args
+   * @param {number} commandIndex
+   * @throws {ProhibitedFlagError} If a command omits a required safety flag
+   * @private
+   */
+  static _validateCommandSafety(command, args, commandIndex) {
+    if (command !== 'prune') {
+      return;
+    }
+    const commandArgs = args.slice(commandIndex + 1);
+    const endOfOptions = commandArgs.indexOf('--');
+    const flags = endOfOptions === -1 ? commandArgs : commandArgs.slice(0, endOfOptions);
+    if (!flags.includes('--dry-run') && !flags.includes('-n')) {
+      throw new ProhibitedFlagError('prune', 'CommandSanitizer.sanitize', {
+        message: "The 'prune' command is allowed only with --dry-run or -n"
+      });
+    }
+  }
 
   /**
    * Validates command-specific flags against the allowlist.
@@ -183,14 +210,29 @@ export default class CommandSanitizer {
       throw new ValidationError('Arguments array cannot be empty', 'CommandSanitizer.sanitize');
     }
 
-    // Memory-efficient cache key using a short structural signature
-    const cacheKey = `${args[0]}:${args.length}:${args[args.length-1]?.length || 0}:${args.join('').length}`;
-    if (this._cache.has(cacheKey)) {
-      return args;
-    }
-
     if (args.length > CommandSanitizer.MAX_ARGS) {
       throw new ValidationError(`Too many arguments: ${args.length}`, 'CommandSanitizer.sanitize');
+    }
+
+    let totalLength = 0;
+    for (const arg of args) {
+      if (typeof arg !== 'string') {
+        throw new ValidationError('Each argument must be a string', 'CommandSanitizer.sanitize', { arg });
+      }
+      totalLength += arg.length;
+      if (arg.length > CommandSanitizer.MAX_ARG_LENGTH) {
+        throw new ValidationError(`Argument too long: ${arg.length}`, 'CommandSanitizer.sanitize');
+      }
+    }
+    if (totalLength > CommandSanitizer.MAX_TOTAL_LENGTH) {
+      throw new ValidationError(`Total arguments length too long: ${totalLength}`, 'CommandSanitizer.sanitize');
+    }
+
+    // The cache key must preserve every argument. A lossy structural key can
+    // collide across commands with different safety properties.
+    const cacheKey = JSON.stringify(args);
+    if (this._cache.has(cacheKey)) {
+      return args;
     }
 
     // Special case: allow exactly ['--version'] as a global flag check
@@ -202,9 +244,6 @@ export default class CommandSanitizer {
     let subcommandIndex = -1;
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
-      if (typeof arg !== 'string') {
-        throw new ValidationError('Each argument must be a string', 'CommandSanitizer.sanitize', { arg });
-      }
       if (!arg.startsWith('-')) {
         subcommandIndex = i;
         break;
@@ -236,19 +275,8 @@ export default class CommandSanitizer {
 
     // Validate per-command flag allowlists
     CommandSanitizer._validateCommandFlags(command, args, subcommandIndex !== -1 ? subcommandIndex : 0);
+    CommandSanitizer._validateCommandSafety(command, args, subcommandIndex !== -1 ? subcommandIndex : 0);
 
-    let totalLength = 0;
-    for (const arg of args) {
-      totalLength += arg.length;
-      if (arg.length > CommandSanitizer.MAX_ARG_LENGTH) {
-        throw new ValidationError(`Argument too long: ${arg.length}`, 'CommandSanitizer.sanitize');
-      }
-    }
-
-    if (totalLength > CommandSanitizer.MAX_TOTAL_LENGTH) {
-      throw new ValidationError(`Total arguments length too long: ${totalLength}`, 'CommandSanitizer.sanitize');
-    }
-    
     // Manage cache size
     if (this._cache.size >= this._maxCacheSize) {
       const firstKey = this._cache.keys().next().value;

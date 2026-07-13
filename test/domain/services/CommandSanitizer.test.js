@@ -21,6 +21,33 @@ describe('CommandSanitizer', () => {
     expect(() => sanitizer.sanitize(['show', '--format=%B', '-s', 'HEAD'])).not.toThrow();
   });
 
+  it('allows prune only as a dry-run inspection', () => {
+    expect(() => sanitizer.sanitize([
+      'prune',
+      '--dry-run',
+      '--verbose',
+      '--expire=2026-07-01T00:00:00.000Z'
+    ])).not.toThrow();
+    expect(() => sanitizer.sanitize(['prune', '-n', '-v', '--expire=now'])).not.toThrow();
+  });
+
+  it('rejects destructive or unrestricted prune forms', () => {
+    expect(() => sanitizer.sanitize(['prune', '--verbose'])).toThrow(ProhibitedFlagError);
+    expect(() => sanitizer.sanitize(['prune', '--dry-run', '--expire=now', '--progress']))
+      .toThrow(ProhibitedFlagError);
+    expect(() => sanitizer.sanitize(['prune', '--', '--dry-run']))
+      .toThrow(ProhibitedFlagError);
+  });
+
+  it('does not confuse safe and destructive commands in the memoization cache', () => {
+    sanitizer.sanitize(['prune', '--dry-run']);
+    expect(() => sanitizer.sanitize(['prune', '--verbose'])).toThrow(ProhibitedFlagError);
+  });
+
+  it('validates argument types before constructing a memoization key', () => {
+    expect(() => sanitizer.sanitize(['rev-parse', 1n])).toThrow(ValidationError);
+  });
+
   it('throws ValidationError for unlisted commands', () => {
     expect(() => sanitizer.sanitize(['push', 'origin', 'main'])).toThrow(ValidationError);
   });

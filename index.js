@@ -28,6 +28,27 @@ import GitPersistenceService from './src/domain/services/GitPersistenceService.j
 // Infrastructure
 import GitStream from './src/infrastructure/GitStream.js';
 
+const CANONICAL_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+function normalizePruneExpiry(expiresBefore) {
+  if (typeof expiresBefore !== 'string' || !CANONICAL_UTC_TIMESTAMP.test(expiresBefore)) {
+    throw new InvalidArgumentError(
+      'expiresBefore must be a canonical UTC timestamp',
+      'GitPlumbing.inspectPrunableObjects',
+      { expiresBefore }
+    );
+  }
+  const parsed = Date.parse(expiresBefore);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== expiresBefore) {
+    throw new InvalidArgumentError(
+      'expiresBefore must be a valid canonical UTC timestamp',
+      'GitPlumbing.inspectPrunableObjects',
+      { expiresBefore }
+    );
+  }
+  return expiresBefore;
+}
+
 /**
  * Named exports for public API
  */
@@ -197,6 +218,21 @@ export default class GitPlumbing {
       }
       throw new GitPlumbingError(err.message, 'GitPlumbing.executeStream', { args, originalError: err });
     }
+  }
+
+  /**
+   * Streams the loose unreachable objects Git would prune before a cutoff.
+   * The command is unconditionally dry-run and never mutates repository state.
+   *
+   * @param {Object} options
+   * @param {string} options.expiresBefore - Canonical UTC timestamp.
+   * @returns {Promise<GitStream>}
+   */
+  async inspectPrunableObjects({ expiresBefore } = {}) {
+    const expiry = normalizePruneExpiry(expiresBefore);
+    return await this.executeStream({
+      args: ['prune', '--dry-run', '--verbose', `--expire=${expiry}`]
+    });
   }
 
   /**

@@ -74,6 +74,24 @@ const commitSha = await git.createCommitFromFiles({
 });
 ```
 
+### Non-Mutating Prune Inspection
+
+Stream loose unreachable objects that Git considers older than a canonical UTC
+cutoff. This API always invokes Git with `--dry-run`; unrestricted `git prune`
+remains prohibited by the command sanitizer.
+
+```javascript
+const plumbing = await GitPlumbing.createDefault({ cwd: './my-repo' });
+const stream = await plumbing.inspectPrunableObjects({
+  expiresBefore: '2026-07-01T00:00:00.000Z'
+});
+
+for await (const chunk of stream) {
+  // Parse Git's `<object-id> <type>` records incrementally.
+}
+await stream.finished;
+```
+
 ## 📖 Deep Dives
 
 - [**Standard Guide**](./GUIDE.md) - From zero to atomic commits.
