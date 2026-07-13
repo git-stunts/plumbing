@@ -101,7 +101,7 @@ export default class CommandSanitizer {
       '--boundary', '--simplify-by-decoration'
     ]),
     'prune': new Set([
-      '--dry-run', '-n', '--verbose', '-v', '--expire'
+      '--dry-run', '-n', '--verbose', '-v', '--no-progress', '--expire'
     ])
   };
 

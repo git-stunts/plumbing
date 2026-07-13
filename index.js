@@ -231,7 +231,7 @@ export default class GitPlumbing {
   async inspectPrunableObjects({ expiresBefore } = {}) {
     const expiry = normalizePruneExpiry(expiresBefore);
     return await this.executeStream({
-      args: ['prune', '--dry-run', '--verbose', `--expire=${expiry}`]
+      args: ['prune', '--dry-run', '--verbose', '--no-progress', `--expire=${expiry}`]
     });
   }
 

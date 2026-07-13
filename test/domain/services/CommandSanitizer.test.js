@@ -26,6 +26,7 @@ describe('CommandSanitizer', () => {
       'prune',
       '--dry-run',
       '--verbose',
+      '--no-progress',
       '--expire=2026-07-01T00:00:00.000Z'
     ])).not.toThrow();
     expect(() => sanitizer.sanitize(['prune', '-n', '-v', '--expire=now'])).not.toThrow();

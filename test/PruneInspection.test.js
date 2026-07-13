@@ -33,6 +33,36 @@ describe('prunable-object inspection', () => {
     await expect(git.execute({ args: ['cat-file', '-t', oid] })).resolves.toBe('blob');
   });
 
+  it('constructs the complete non-mutating inspection command', async () => {
+    let invocation;
+    const plumbing = new GitPlumbing({
+      cwd: repoPath,
+      runner: async (options) => {
+        invocation = options;
+        return {
+          stdoutStream: new ReadableStream({
+            start(controller) {
+              controller.close();
+            }
+          }),
+          exitPromise: Promise.resolve({ code: 0, stderr: '' })
+        };
+      }
+    });
+    const expiresBefore = '2026-07-01T00:00:00.000Z';
+
+    const stream = await plumbing.inspectPrunableObjects({ expiresBefore });
+    await stream.collect();
+
+    expect(invocation.args).toEqual([
+      'prune',
+      '--dry-run',
+      '--verbose',
+      '--no-progress',
+      `--expire=${expiresBefore}`
+    ]);
+  });
+
   for (const expiresBefore of [
     undefined,
     'now',

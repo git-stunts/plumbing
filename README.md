@@ -77,8 +77,8 @@ const commitSha = await git.createCommitFromFiles({
 ### Non-Mutating Prune Inspection
 
 Stream loose unreachable objects that Git considers older than a canonical UTC
-cutoff. This API always invokes Git with `--dry-run`; unrestricted `git prune`
-remains prohibited by the command sanitizer.
+cutoff. This API always invokes Git with `--dry-run --no-progress`;
+unrestricted `git prune` remains prohibited by the command sanitizer.
 
 ```javascript
 const plumbing = await GitPlumbing.createDefault({ cwd: './my-repo' });
