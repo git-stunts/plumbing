@@ -6,6 +6,7 @@ import "./GitBlob.test.js";
 import "./GitCommitFlow.test.js";
 import "./GitRef.test.js";
 import "./GitSha.test.js";
+import "./PruneInspection.test.js";
 import "./ShellRunner.test.js";
 import "./StreamCompletion.test.js";
 import "./Streaming.test.js";
