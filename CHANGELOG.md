@@ -8,10 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - **Safe Prune Inspection**: Added `inspectPrunableObjects()` for streaming the
   loose unreachable objects Git would prune before a canonical UTC cutoff.
 
 ### Fixed
+
 - **Sanitizer Memoization**: Replaced the lossy command-cache key so commands
   with different safety properties cannot collide.
 
