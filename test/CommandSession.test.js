@@ -59,7 +59,7 @@ describe('CommandSession', () => {
     await expect(session.write('late')).rejects.toMatchObject({
       details: { code: 'SESSION_INPUT_CLOSED' },
     });
-    completion.resolve({ code: 0, stderr: '' });
+    completion.resolve({ code: 0, stderr: '', timedOut: false });
     await session.finished;
   });
 
@@ -91,7 +91,7 @@ describe('CommandSession', () => {
     expect(secondResult.reason).toBeInstanceOf(GitPlumbingError);
     expect(writeCalls).toBe(1);
     expect(terminateCalls).toBe(1);
-    completion.resolve({ code: 1, stderr: 'failed', terminated: true });
+    completion.resolve({ code: 1, stderr: 'failed', terminated: true, timedOut: false });
     await session.finished;
   });
 
@@ -113,7 +113,7 @@ describe('CommandSession', () => {
     expect(session.stdout.finished).toBe(session.finished);
     await expect(session.closeInput()).rejects.toThrow('close failed');
     expect(terminateCalls).toBe(1);
-    completion.resolve({ code: 1, stderr: '', terminated: true });
+    completion.resolve({ code: 1, stderr: '', terminated: true, timedOut: false });
     await session.finished;
   });
 
@@ -135,8 +135,28 @@ describe('CommandSession', () => {
 
     expect(terminateCalls).toBe(1);
     await expect(session.write('late')).rejects.toBeInstanceOf(GitPlumbingError);
-    completion.resolve({ code: 1, stderr: '', terminated: true });
+    completion.resolve({ code: 1, stderr: '', terminated: true, timedOut: false });
     await session.finished;
+  });
+
+  it('validates readable output and the resolved completion contract', async () => {
+    const result = {
+      stdoutStream: emptyStream(),
+      finished: Promise.resolve({ code: 0, stderr: '', timedOut: false }),
+      write: async () => {},
+      closeInput: async () => {},
+      terminate: () => {},
+    };
+
+    expect(() => new CommandSession({ ...result, stdoutStream: {} })).toThrow(
+      'Expected a Web or Node.js readable stream'
+    );
+
+    const invalidCompletion = new CommandSession({
+      ...result,
+      finished: Promise.resolve({ code: 0, stderr: '' }),
+    });
+    await expect(invalidCompletion.finished).rejects.toThrow('timedOut');
   });
 });
 

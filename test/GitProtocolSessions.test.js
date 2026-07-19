@@ -35,7 +35,7 @@ function scriptedSession(output) {
     terminate: () => {
       terminateCalls += 1;
       stdoutController.close();
-      finish({ code: 1, stderr: '', terminated: true });
+      finish({ code: 1, stderr: '', terminated: true, timedOut: false });
     },
   });
   return { session, terminateCalls: () => terminateCalls };
@@ -120,11 +120,18 @@ describe('long-lived Git protocol sessions', () => {
     const malformedOid = '1'.repeat(firstOid.length);
     const scripted = scriptedSession(`${missingOid} missing\nnot-an-oid blob 1\n`);
     const reader = new GitCatFileSession(scripted.session);
+    const readResponse = reader._readResponse.bind(reader);
+    let readCalls = 0;
+    reader._readResponse = async (...args) => {
+      readCalls += 1;
+      return await readResponse(...args);
+    };
 
-    await expect(reader.readMany([missingOid, malformedOid])).rejects.toBeInstanceOf(
+    await expect(reader.readMany([missingOid, malformedOid, firstOid])).rejects.toBeInstanceOf(
       GitObjectMissingError
     );
     expect(scripted.terminateCalls()).toBe(1);
+    expect(readCalls).toBe(2);
     await expect(reader.read(firstOid)).rejects.toBeInstanceOf(GitProtocolError);
   });
 
@@ -192,6 +199,16 @@ describe('long-lived Git protocol sessions', () => {
     terminated.terminate();
     const terminatedResult = await terminated.finished;
     expect(terminatedResult.terminated).toBe(true);
+  });
+
+  it('reports invalid session options through the structured plumbing boundary', async () => {
+    const args = ['cat-file', '--batch-command'];
+
+    await expect(git.openSession({ args, timeout: 0 })).rejects.toMatchObject({
+      name: 'GitPlumbingError',
+      operation: 'GitPlumbing.openSession',
+      details: { args },
+    });
   });
 
   it('reports early exit and bounded stderr without hanging', async () => {

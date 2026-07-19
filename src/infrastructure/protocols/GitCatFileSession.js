@@ -111,6 +111,9 @@ export default class GitCatFileSession {
           remainingBytes -= object.size;
         } catch (error) {
           for (let remaining = index + 1; remaining < objectNames.length; remaining += 1) {
+            if (this._closed) {
+              break;
+            }
             try {
               await this._readResponse(objectNames[remaining], 0);
             } catch (drainError) {

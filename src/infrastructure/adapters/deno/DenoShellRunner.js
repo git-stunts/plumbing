@@ -64,7 +64,10 @@ export default class DenoShellRunner {
       try {
         await closeInput(true);
       } catch (error) {
-        processError ??= error;
+        // Teardown after a clean exit must not rewrite the process result.
+        if (status.code !== 0) {
+          processError ??= error;
+        }
       }
       return {
         code: processError !== null && status.code === 0 ? 1 : status.code,

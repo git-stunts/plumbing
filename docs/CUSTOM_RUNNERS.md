@@ -97,7 +97,7 @@ interface SessionRunnerResult {
     stderr: string;
     signal?: string | null;
     terminated?: boolean;
-    timedOut?: boolean;
+    timedOut: boolean;
   }>;
   write(bytes: Uint8Array): Promise<void>;
   closeInput(): Promise<void>;

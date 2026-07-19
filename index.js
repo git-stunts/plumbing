@@ -268,15 +268,15 @@ export default class GitPlumbing {
         'GitPlumbing.openSession'
       );
     }
-    const options = SessionRunnerOptionsSchema.parse({
-      command: 'git',
-      args,
-      cwd: this.cwd,
-      env,
-      maxStderrBytes,
-      timeout
-    });
     try {
+      const options = SessionRunnerOptionsSchema.parse({
+        command: 'git',
+        args,
+        cwd: this.cwd,
+        env,
+        maxStderrBytes,
+        timeout
+      });
       return new CommandSession(await this.sessionRunner(options));
     } catch (error) {
       if (error instanceof GitPlumbingError) {
