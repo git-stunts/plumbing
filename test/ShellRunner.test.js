@@ -49,4 +49,36 @@ describe('ShellRunner', () => {
     expect(code).toBe(0);
     expect(stdout.trim()).toBe('95d09f2b10159347eece71399a7e2e907ea3df4f');
   });
+
+  it('opens a duplex command session', async () => {
+    const session = await ShellRunner.open({
+      command: 'git',
+      args: ['--version']
+    });
+    let stdout = '';
+    const decoder = new TextDecoder();
+    for await (const chunk of session) {
+      stdout += decoder.decode(chunk);
+    }
+    const result = await session.finished;
+
+    expect(result.code).toBe(0);
+    expect(stdout).toContain('git version');
+  });
+
+  it('reports a spawn failure through the session completion contract', async () => {
+    const session = await ShellRunner.open({
+      command: 'git-stunts-command-that-does-not-exist',
+      args: []
+    });
+
+    for await (const _ of session) {
+      // Spawn failures have no stdout.
+    }
+    const result = await session.finished;
+
+    expect(result.code).not.toBe(0);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.stderr).toBe('');
+  });
 });

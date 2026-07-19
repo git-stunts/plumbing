@@ -3,11 +3,13 @@ import "./deno_shim.js";
 
 // Import all tests to run them in one Deno process with the shim
 import "./GitBlob.test.js";
+import "./GitProtocolSessions.test.js";
 import "./GitCommitFlow.test.js";
 import "./GitRef.test.js";
 import "./GitSha.test.js";
 import "./PruneInspection.test.js";
 import "./ShellRunner.test.js";
+import "./CommandSession.test.js";
 import "./StreamCompletion.test.js";
 import "./Streaming.test.js";
 import "./domain/entities/GitCommit.test.js";

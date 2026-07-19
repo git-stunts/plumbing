@@ -59,7 +59,44 @@ const git = await GitPlumbing.createRepository({
 });
 ```
 
-## 3. Resilience & Retry Policies
+## 3. Persistent Git Protocol Sessions
+
+Use typed protocol sessions when repeated object operations would otherwise
+spawn one Git process per request:
+
+```javascript
+const objects = await git.openCatFileSession();
+try {
+  const object = await objects.read(oid, { maxBytes: 4 * 1024 * 1024 });
+  processObject(object);
+} finally {
+  await objects.close();
+}
+```
+
+The available wrappers are:
+
+- `openCatFileSession()`: Repeated metadata and bounded content reads through
+  `git cat-file --batch-command`.
+- `openMktreeSession()`: Incremental iterable tree writes through
+  `git mktree --batch -z`.
+- `openFastImportSession()`: Caller-bounded blob writes and explicit checkpoints
+  through `git fast-import`.
+
+`read()` buffers at most its `maxBytes` budget. `readMany()` applies that budget
+to the total retained content, not independently to every object. A rejected
+oversized response is drained so the process remains usable. Callers handling
+objects larger than the budget should chunk them at their storage boundary.
+
+Fast-import blobs become externally visible after `checkpoint()` or `close()`.
+Always close typed sessions in `finally`. Raw `openSession()` callers must also
+consume or destroy `session.stdout`, close input or terminate the process, and
+await `session.finished`.
+
+These wrappers do not pool themselves. A higher storage layer decides whether
+to reuse, expire, or replace a session and owns all cache and retention policy.
+
+## 4. Resilience & Retry Policies
 
 Lock contention (`index.lock`) is a common failure mode in concurrent Git operations. `plumbing` includes an `ExecutionOrchestrator` that handles retries with exponential backoff.
 
@@ -79,7 +116,7 @@ await git.execute({
 });
 ```
 
-## 4. Telemetry & Observability
+## 5. Telemetry & Observability
 
 Every command executed through `GitPlumbing` carries a `traceId`. You can use this to correlate logs across distributed systems.
 
@@ -95,7 +132,7 @@ await git.execute({
 // GitPlumbingError if the command fails.
 ```
 
-## 5. Runtime-Specific Nuances
+## 6. Runtime-Specific Nuances
 
 While the API is unified, the underlying adapters optimize for each runtime:
 

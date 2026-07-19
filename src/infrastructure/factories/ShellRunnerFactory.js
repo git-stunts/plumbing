@@ -33,13 +33,35 @@ export default class ShellRunnerFactory {
    * @returns {import('../../ports/CommandRunnerPort.js').CommandRunner} A functional shell runner
    */
   static create(options = {}) {
+    return this.createPorts(options).runner;
+  }
+
+  /**
+   * Creates the one-shot and optional session ports from one adapter instance.
+   * @param {Object} [options]
+   * @param {string} [options.env] - Override environment detection.
+   * @returns {{runner: import('../../ports/CommandRunnerPort.js').CommandRunner, sessionRunner?: import('../../ports/CommandSessionRunnerPort.js').CommandSessionRunner}}
+   */
+  static createPorts(options = {}) {
+    const runner = this._createRunner(options);
+    return Object.freeze({
+      runner: runner.run.bind(runner),
+      sessionRunner: typeof runner.open === 'function' ? runner.open.bind(runner) : undefined
+    });
+  }
+
+  /**
+   * @param {Object} [options]
+   * @returns {Object}
+   * @private
+   */
+  static _createRunner(options = {}) {
     const env = options.env || this._detectEnvironment();
     
     // Check registry first
     if (this._registry.has(env)) {
       const RunnerClass = this._registry.get(env);
-      const runner = new RunnerClass();
-      return runner.run.bind(runner);
+      return new RunnerClass();
     }
 
     const runners = {
@@ -53,8 +75,7 @@ export default class ShellRunnerFactory {
       throw new Error(`Unsupported environment: ${env}`);
     }
 
-    const runner = new RunnerClass();
-    return runner.run.bind(runner);
+    return new RunnerClass();
   }
 
   /**
