@@ -1,7 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import GitPlumbing, { CommandSession, GitCatFileSession } from '../index.js';
+import GitPlumbing, {
+  CommandSession,
+  GitCatFileSession,
+  GitFastImportSession,
+  GitMktreeSession,
+} from '../index.js';
 import GitPlumbingError from '../src/domain/errors/GitPlumbingError.js';
 import GitObjectMissingError from '../src/domain/errors/GitObjectMissingError.js';
 import GitProtocolError from '../src/domain/errors/GitProtocolError.js';
@@ -125,6 +130,7 @@ describe('long-lived Git protocol sessions', () => {
 
   it('writes NUL-framed trees through one mktree process', async () => {
     const writer = await git.openMktreeSession();
+    expect(writer).toBeInstanceOf(GitMktreeSession);
     async function* entries() {
       yield { mode: '100644', type: 'blob', oid: firstOid, name: 'line\nwith-tab\t.txt' };
       yield { mode: '100644', type: 'blob', oid: secondOid, name: 'second.txt' };
@@ -152,6 +158,7 @@ describe('long-lived Git protocol sessions', () => {
 
   it('checkpoints and completes blobs through one fast-import process', async () => {
     const writer = await git.openFastImportSession();
+    expect(writer).toBeInstanceOf(GitFastImportSession);
     const checkpointedOid = await writer.writeBlob('checkpointed object');
 
     await writer.checkpoint();
