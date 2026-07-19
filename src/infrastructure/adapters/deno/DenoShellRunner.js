@@ -70,7 +70,7 @@ export default class DenoShellRunner {
         }
       }
       return {
-        code: processError !== null && status.code === 0 ? 1 : status.code,
+        code: status.code === 0 && (processError !== null || timedOut) ? 1 : status.code,
         error: processError,
         signal: status.signal,
         stderr: await stderrPromise,
