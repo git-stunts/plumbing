@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-07-19
+
+### Added
+
+- **Persistent Git Protocol Sessions**: Added bounded, backpressured sessions
+  for `git cat-file --batch`, `git mktree --batch -z`, and `git fast-import`.
+- **Cross-Runtime Duplex Port**: Added an optional session runner contract for
+  Node.js, Bun, Deno, and custom runners while preserving one-shot execution.
+
+### Fixed
+
+- **Session Contract Validation**: Normalized validation and process failures,
+  bounded stderr collection, and hardened close, timeout, and poison behavior.
+
 ## [3.1.0] - 2026-07-13
 
 ### Added

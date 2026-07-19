@@ -1,6 +1,6 @@
 {
   "name": "@git-stunts/plumbing",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Robust async, stream-first Git plumbing for Node, Bun, and Deno.",
   "type": "module",
   "main": "index.js",
