@@ -3,6 +3,7 @@
  */
 
 import { RunnerOptionsSchema, DEFAULT_MAX_BUFFER_SIZE } from './src/ports/RunnerOptionsSchema.js';
+import { SessionRunnerOptionsSchema } from './src/ports/SessionRunnerOptionsSchema.js';
 
 // Value Objects
 import GitSha from './src/domain/value-objects/GitSha.js';
@@ -16,7 +17,10 @@ import GitTree from './src/domain/entities/GitTree.js';
 
 // Services
 import GitPlumbingError from './src/domain/errors/GitPlumbingError.js';
+import GitObjectMissingError from './src/domain/errors/GitObjectMissingError.js';
+import GitProtocolError from './src/domain/errors/GitProtocolError.js';
 import InvalidArgumentError from './src/domain/errors/InvalidArgumentError.js';
+import UnsupportedCapabilityError from './src/domain/errors/UnsupportedCapabilityError.js';
 import CommandSanitizer from './src/domain/services/CommandSanitizer.js';
 import ShellRunnerFactory from './src/infrastructure/factories/ShellRunnerFactory.js';
 import GitRepositoryService from './src/domain/services/GitRepositoryService.js';
@@ -27,6 +31,10 @@ import GitPersistenceService from './src/domain/services/GitPersistenceService.j
 
 // Infrastructure
 import GitStream from './src/infrastructure/GitStream.js';
+import CommandSession from './src/infrastructure/CommandSession.js';
+import GitCatFileSession from './src/infrastructure/protocols/GitCatFileSession.js';
+import GitFastImportSession from './src/infrastructure/protocols/GitFastImportSession.js';
+import GitMktreeSession from './src/infrastructure/protocols/GitMktreeSession.js';
 
 const CANONICAL_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
@@ -62,7 +70,14 @@ export {
   GitCommandBuilder,
   ShellRunnerFactory,
   GitPlumbingError,
+  GitObjectMissingError,
+  GitProtocolError,
   InvalidArgumentError,
+  UnsupportedCapabilityError,
+  CommandSession,
+  GitCatFileSession,
+  GitFastImportSession,
+  GitMktreeSession,
   CommandRetryPolicy,
   GitRepositoryService
 };
@@ -75,13 +90,14 @@ export default class GitPlumbing {
   /**
    * @param {Object} options
    * @param {import('./src/ports/CommandRunnerPort.js').CommandRunner} options.runner - The functional port for shell execution.
+   * @param {import('./src/ports/CommandSessionRunnerPort.js').CommandSessionRunner} [options.sessionRunner] - Optional duplex process port.
    * @param {string} [options.cwd='.'] - The working directory for git operations.
    * @param {CommandSanitizer} [options.sanitizer] - Injected sanitizer.
    * @param {ExecutionOrchestrator} [options.orchestrator] - Injected orchestrator.
-   * @param {Object} [options.fsAdapter] - Optional filesystem adapter for CWD validation.
    */
   constructor({ 
-    runner, 
+    runner,
+    sessionRunner,
     cwd = '.',
     sanitizer = new CommandSanitizer(),
     orchestrator = new ExecutionOrchestrator()
@@ -92,6 +108,8 @@ export default class GitPlumbing {
 
     /** @private */
     this.runner = runner;
+    /** @private */
+    this.sessionRunner = sessionRunner;
     /** @private */
     this.cwd = cwd;
     /** @private */
@@ -118,16 +136,28 @@ export default class GitPlumbing {
    * @param {Object} [options]
    * @param {string} [options.cwd]
    * @param {string} [options.env] - Override environment detection.
+   * @param {import('./src/ports/CommandRunnerPort.js').CommandRunner} [options.runner]
+   * @param {import('./src/ports/CommandSessionRunnerPort.js').CommandSessionRunner} [options.sessionRunner]
    * @param {CommandSanitizer} [options.sanitizer]
    * @param {ExecutionOrchestrator} [options.orchestrator]
    * @returns {Promise<GitPlumbing>}
    */
   static async createDefault(options = {}) {
-    const env = options.env || globalThis.process?.env?.GIT_PLUMBING_ENV;
-    const cwd = options.cwd ? await ShellRunnerFactory.validateCwd(options.cwd) : '.';
+    const {
+      cwd: requestedCwd,
+      env: requestedEnv,
+      runner: customRunner,
+      sessionRunner: customSessionRunner,
+      ...dependencies
+    } = options;
+    const env = requestedEnv || globalThis.process?.env?.GIT_PLUMBING_ENV;
+    const cwd = requestedCwd ? await ShellRunnerFactory.validateCwd(requestedCwd) : '.';
+    const ports = ShellRunnerFactory.createPorts({ env });
     return new GitPlumbing({
-      runner: ShellRunnerFactory.create({ env }),
-      ...options,
+      ...dependencies,
+      runner: customRunner ?? ports.runner,
+      sessionRunner:
+        customSessionRunner ?? (customRunner === undefined ? ports.sessionRunner : undefined),
       cwd
     });
   }
@@ -218,6 +248,100 @@ export default class GitPlumbing {
       }
       throw new GitPlumbingError(err.message, 'GitPlumbing.executeStream', { args, originalError: err });
     }
+  }
+
+  /**
+   * Opens a long-lived Git process with writable stdin and streaming stdout.
+   * Sessions have no implicit timeout; their owner must close or terminate them.
+   * @param {Object} options
+   * @param {string[]} options.args - Array of Git arguments.
+   * @param {Object} [options.env] - Optional environment overrides.
+   * @param {number} [options.maxStderrBytes] - Maximum retained stderr bytes.
+   * @param {number} [options.timeout] - Optional session lifetime in milliseconds.
+   * @returns {Promise<CommandSession>}
+   */
+  async openSession({ args, env, maxStderrBytes, timeout }) {
+    this.sanitizer.sanitize(args);
+    if (typeof this.sessionRunner !== 'function') {
+      throw new UnsupportedCapabilityError(
+        'duplex command sessions',
+        'GitPlumbing.openSession'
+      );
+    }
+    const options = SessionRunnerOptionsSchema.parse({
+      command: 'git',
+      args,
+      cwd: this.cwd,
+      env,
+      maxStderrBytes,
+      timeout
+    });
+    try {
+      return new CommandSession(await this.sessionRunner(options));
+    } catch (error) {
+      if (error instanceof GitPlumbingError) {
+        throw error;
+      }
+      throw new GitPlumbingError(error.message, 'GitPlumbing.openSession', {
+        args,
+        originalError: error
+      });
+    }
+  }
+
+  /**
+   * Opens a typed `git cat-file --batch-command` reader.
+   * @param {Object} [options]
+   * @param {boolean} [options.buffered=true]
+   * @param {Object} [options.env]
+   * @param {number} [options.maxStderrBytes]
+   * @param {number} [options.timeout]
+   * @returns {Promise<GitCatFileSession>}
+   */
+  async openCatFileSession({ buffered = true, env, maxStderrBytes, timeout } = {}) {
+    const session = await this.openSession({
+      args: ['cat-file', '--batch-command', ...(buffered ? ['--buffer'] : [])],
+      env,
+      maxStderrBytes,
+      timeout
+    });
+    return new GitCatFileSession(session, { buffered });
+  }
+
+  /**
+   * Opens a typed `git mktree --batch -z` writer.
+   * @param {Object} [options]
+   * @param {Object} [options.env]
+   * @param {number} [options.maxStderrBytes]
+   * @param {number} [options.timeout]
+   * @returns {Promise<GitMktreeSession>}
+   */
+  async openMktreeSession({ env, maxStderrBytes, timeout } = {}) {
+    const session = await this.openSession({
+      args: ['mktree', '--batch', '-z'],
+      env,
+      maxStderrBytes,
+      timeout
+    });
+    return new GitMktreeSession(session);
+  }
+
+  /**
+   * Opens a typed `git fast-import` blob writer.
+   * @param {Object} [options]
+   * @param {Object} [options.env]
+   * @param {number} [options.maxStderrBytes]
+   * @param {number} [options.timeout]
+   * @returns {Promise<GitFastImportSession>}
+   */
+  async openFastImportSession({ env, maxStderrBytes, timeout } = {}) {
+    const session = await this.openSession({
+      args: ['fast-import', '--quiet', '--done'],
+      env,
+      maxStderrBytes,
+      timeout
+    });
+    return new GitFastImportSession(session);
   }
 
   /**

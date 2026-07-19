@@ -92,12 +92,48 @@ for await (const chunk of stream) {
 await stream.finished;
 ```
 
+### Persistent Git Protocol Sessions
+
+Repeated object operations can share one stock Git process. The typed session
+wrappers handle protocol framing while preserving explicit lifecycle ownership:
+
+```javascript
+const plumbing = await GitPlumbing.createDefault({ cwd: './my-repo' });
+const objects = await plumbing.openCatFileSession();
+
+try {
+  const values = await objects.readMany([firstOid, secondOid], {
+    maxBytes: 8 * 1024 * 1024
+  });
+  for (const { oid, type, content } of values) {
+    consume(oid, type, content);
+  }
+} finally {
+  await objects.close();
+}
+```
+
+`maxBytes` is a cumulative content budget for `readMany()`. A response that
+exceeds the remaining budget is drained without being retained, the operation
+fails with `OBJECT_BUFFER_LIMIT_EXCEEDED`, and the session remains aligned for
+later requests. The default budget is 10 MiB.
+
+Additional typed protocols are available through `openMktreeSession()` and
+`openFastImportSession()`. Tree entries may be supplied as an iterable or async
+iterable, so the wrapper does not construct a second whole-tree buffer.
+
+Sessions have no implicit timeout. Their owner must call `close()` for orderly
+completion or `terminate()`/`abort()` when abandoning work. Plumbing owns the
+process and Git protocol mechanics only; callers such as `@git-stunts/git-cas`
+own pooling, chunking, caching, retention, and eviction policy.
+
 ## 📖 Deep Dives
 
 - [**Standard Guide**](./GUIDE.md) - From zero to atomic commits.
 - [**Advanced Guide**](./ADVANCED_GUIDE.md) - Custom runners, streaming internals, and performance tuning.
 - [**Architecture**](./ARCHITECTURE.md) - Blueprints of the Hexagonal design.
 - [**Recipes**](./docs/RECIPES.md) - Common patterns for Git-based applications.
+- [**Custom Runners**](./docs/CUSTOM_RUNNERS.md) - One-shot and optional duplex runner contracts.
 
 ## 📄 License
 

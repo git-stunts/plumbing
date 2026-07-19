@@ -143,6 +143,15 @@ describe('CommandSanitizer', () => {
       });
     });
 
+    describe('fast-import command', () => {
+      it('allows only the protocol flags used by the session adapter', () => {
+        expect(() => sanitizer.sanitize(['fast-import', '--quiet', '--done'])).not.toThrow();
+        expect(() => sanitizer.sanitize(['fast-import', '--force'])).toThrow(ProhibitedFlagError);
+        expect(() => sanitizer.sanitize(['fast-import', '--export-marks=marks']))
+          .toThrow(ProhibitedFlagError);
+      });
+    });
+
     describe('other commands have no additional restrictions', () => {
       it('allows any flags for rev-parse', () => {
         expect(() => sanitizer.sanitize(['rev-parse', '--show-toplevel'])).not.toThrow();

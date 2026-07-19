@@ -43,6 +43,7 @@ export default class CommandSanitizer {
     'check-attr',
     'init',
     'config',
+    'fast-import',
     'log',
     'show',
     'prune'
@@ -102,6 +103,9 @@ export default class CommandSanitizer {
     ]),
     'prune': new Set([
       '--dry-run', '-n', '--verbose', '-v', '--no-progress', '--expire'
+    ]),
+    'fast-import': new Set([
+      '--quiet', '--done'
     ])
   };
 
