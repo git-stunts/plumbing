@@ -54,4 +54,44 @@ describe('EnvironmentPolicy', () => {
     expect(EnvironmentPolicy.filter({})).toEqual({});
     expect(EnvironmentPolicy.filter(undefined)).toEqual({});
   });
+
+  // Without a way to locate the user's configuration, git cannot read
+  // ~/.gitconfig and falls back to inventing an identity from the system
+  // account and hostname. Callers then see commits attributed to addresses
+  // such as user@laptop.local that exist nowhere and verify against nothing,
+  // while the operator's real, configured identity sits unread on disk.
+  it('lets git locate the user configuration', () => {
+    const env = {
+      HOME: '/home/operator',
+      XDG_CONFIG_HOME: '/home/operator/.config',
+      GIT_CONFIG_GLOBAL: '/home/operator/.gitconfig'
+    };
+
+    const filtered = EnvironmentPolicy.filter(env);
+
+    expect(filtered).toEqual(env);
+  });
+
+  it('passes USERPROFILE so Windows callers resolve a home directory too', () => {
+    const filtered = EnvironmentPolicy.filter({ USERPROFILE: 'C:\\Users\\operator' });
+
+    expect(filtered.USERPROFILE).toBe('C:\\Users\\operator');
+  });
+
+  // Reading configuration is not the same as accepting arbitrary overrides.
+  // GIT_CONFIG_PARAMETERS injects settings directly into the process and stays
+  // blocked, so a caller cannot smuggle configuration past the policy.
+  it('still refuses direct configuration injection', () => {
+    const filtered = EnvironmentPolicy.filter({
+      HOME: '/home/operator',
+      GIT_CONFIG_PARAMETERS: "'user.name=attacker'",
+      GIT_EXEC_PATH: '/tmp/evil',
+      GIT_TEMPLATE_DIR: '/tmp/evil'
+    });
+
+    expect(filtered.HOME).toBe('/home/operator');
+    expect(filtered.GIT_CONFIG_PARAMETERS).toBeUndefined();
+    expect(filtered.GIT_EXEC_PATH).toBeUndefined();
+    expect(filtered.GIT_TEMPLATE_DIR).toBeUndefined();
+  });
 });
