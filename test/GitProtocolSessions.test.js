@@ -42,14 +42,22 @@ function scriptedSession(output) {
   return { session, terminateCalls: () => terminateCalls };
 }
 
-function gatedSession(output, releaseAfterWrites) {
+function gatedSession(output, releaseAfterWrites, { gateTermination = false } = {}) {
   let finish;
   let released = false;
+  let releaseTermination;
+  let signalTerminationStarted;
   let terminateCalls = 0;
   let stdoutController;
   const writes = [];
   const finished = new Promise((resolve) => {
     finish = resolve;
+  });
+  const terminationStarted = new Promise((resolve) => {
+    signalTerminationStarted = resolve;
+  });
+  const terminationRelease = new Promise((resolve) => {
+    releaseTermination = resolve;
   });
   const session = new CommandSession({
     stdoutStream: new ReadableStream({
@@ -71,11 +79,25 @@ function gatedSession(output, releaseAfterWrites) {
     },
     terminate: () => {
       terminateCalls += 1;
-      stdoutController.close();
-      finish({ code: 1, stderr: '', terminated: true, timedOut: false });
+      const finishTermination = () => {
+        stdoutController.close();
+        finish({ code: 1, stderr: '', terminated: true, timedOut: false });
+      };
+      if (gateTermination) {
+        signalTerminationStarted();
+        void terminationRelease.then(finishTermination);
+      } else {
+        finishTermination();
+      }
     },
   });
-  return { session, writes, terminateCalls: () => terminateCalls };
+  return {
+    session,
+    writes,
+    releaseTermination,
+    terminationStarted,
+    terminateCalls: () => terminateCalls,
+  };
 }
 
 describe('long-lived Git protocol sessions', () => {
@@ -478,25 +500,25 @@ describe('long-lived Git protocol sessions', () => {
   });
 
   it('preserves a ref transaction failure when close runs during cleanup', async () => {
-    const scripted = gatedSession('start: ok\nprepare: nope\n', 1);
+    const scripted = gatedSession('start: ok\nprepare: nope\n', 1, {
+      gateTermination: true,
+    });
     const writer = new GitUpdateRefSession(scripted.session);
-    let failure;
+    const update = writer.update({
+      ref: 'refs/plumbing/test',
+      newOid: firstOid,
+      expectedOldOid: null,
+    });
 
-    try {
-      await writer.update({
-        ref: 'refs/plumbing/test',
-        newOid: firstOid,
-        expectedOldOid: null,
-      });
-    } catch (error) {
-      failure = error;
-      await expect(writer.close()).resolves.toBeUndefined();
-    }
+    await scripted.terminationStarted;
+    const close = writer.close();
+    scripted.releaseTermination();
 
-    expect(failure).toMatchObject({
+    await expect(update).rejects.toMatchObject({
       operation: 'GitUpdateRefSession.update',
       details: { response: 'prepare: nope', stage: 'prepare' },
     });
+    await expect(close).resolves.toBeUndefined();
     expect(scripted.terminateCalls()).toBe(1);
     await writer.close();
   });
