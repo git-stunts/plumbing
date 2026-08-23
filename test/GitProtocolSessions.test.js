@@ -41,6 +41,40 @@ function scriptedSession(output) {
   return { session, terminateCalls: () => terminateCalls };
 }
 
+function gatedSession(output, releaseAfterWrites) {
+  let finish;
+  let released = false;
+  let stdoutController;
+  const writes = [];
+  const finished = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const session = new CommandSession({
+    stdoutStream: new ReadableStream({
+      start(controller) {
+        stdoutController = controller;
+      },
+    }),
+    finished,
+    write: async (bytes) => {
+      writes.push(new Uint8Array(bytes));
+      if (!released && writes.length === releaseAfterWrites) {
+        released = true;
+        stdoutController.enqueue(new TextEncoder().encode(output));
+      }
+    },
+    closeInput: async () => {
+      stdoutController.close();
+      finish({ code: 0, stderr: '', terminated: false, timedOut: false });
+    },
+    terminate: () => {
+      stdoutController.close();
+      finish({ code: 1, stderr: '', terminated: true, timedOut: false });
+    },
+  });
+  return { session, writes };
+}
+
 describe('long-lived Git protocol sessions', () => {
   let git;
   let repoPath;
@@ -69,16 +103,38 @@ describe('long-lived Git protocol sessions', () => {
     const reader = await git.openCatFileSession();
     const first = await reader.read(firstOid);
     const metadata = await reader.info(secondOid);
+    const metadataBatch = await reader.infoMany([firstOid, secondOid, firstOid]);
     const objects = await reader.readMany([firstOid, secondOid, firstOid]);
 
     expect(DECODER.decode(first.content)).toBe('first object');
     expect(metadata).toMatchObject({ oid: secondOid, type: 'blob', size: 13 });
+    expect(metadataBatch.map(({ oid, size }) => ({ oid, size }))).toEqual([
+      { oid: firstOid, size: 12 },
+      { oid: secondOid, size: 13 },
+      { oid: firstOid, size: 12 },
+    ]);
     expect(objects.map((object) => DECODER.decode(object.content))).toEqual([
       'first object',
       'second object',
       'first object',
     ]);
     await reader.close();
+    await reader.close();
+  });
+
+  it('pipelines ordered metadata batches before consuming responses', async () => {
+    const output = `${firstOid} blob 12\n${secondOid} blob 13\n`;
+    const scripted = gatedSession(output, 2);
+    const reader = new GitCatFileSession(scripted.session);
+
+    await expect(reader.infoMany([firstOid, secondOid])).resolves.toEqual([
+      { oid: firstOid, type: 'blob', size: 12 },
+      { oid: secondOid, type: 'blob', size: 13 },
+    ]);
+    expect(DECODER.decode(scripted.writes[0])).toBe(
+      `info ${firstOid}\ninfo ${secondOid}\n`
+    );
+    expect(DECODER.decode(scripted.writes[1])).toBe('flush\n');
     await reader.close();
   });
 
@@ -89,6 +145,10 @@ describe('long-lived Git protocol sessions', () => {
     await expect(reader.readMany([firstOid, missingOid, secondOid])).rejects.toBeInstanceOf(
       GitObjectMissingError
     );
+    await expect(reader.infoMany([firstOid, missingOid, secondOid])).rejects.toBeInstanceOf(
+      GitObjectMissingError
+    );
+    await expect(reader.info(secondOid)).resolves.toMatchObject({ oid: secondOid });
     await expect(reader.read(secondOid)).resolves.toMatchObject({ oid: secondOid });
     await expect(reader.read('invalid object name')).rejects.toBeInstanceOf(InvalidArgumentError);
     await reader.close();
@@ -144,12 +204,34 @@ describe('long-lived Git protocol sessions', () => {
     }
     const firstTree = await writer.write(entries());
     const emptyTree = await writer.write([]);
+    const batchTrees = await writer.writeMany([
+      [{ mode: '100644', type: 'blob', oid: firstOid, name: 'batch.txt' }],
+      [],
+    ]);
 
     await writer.close();
     await writer.close();
     await expect(git.execute({ args: ['cat-file', '-t', firstTree] })).resolves.toBe('tree');
     await expect(git.execute({ args: ['cat-file', '-t', emptyTree] })).resolves.toBe('tree');
+    await expect(
+      Promise.all(batchTrees.map((oid) => git.execute({ args: ['cat-file', '-t', oid] })))
+    ).resolves.toEqual(['tree', 'tree']);
     await expect(writer.write([])).rejects.toBeInstanceOf(GitProtocolError);
+  });
+
+  it('pipelines bounded tree batches before consuming ordered OIDs', async () => {
+    const firstTree = 'a'.repeat(firstOid.length);
+    const secondTree = 'b'.repeat(firstOid.length);
+    const scripted = gatedSession(`${firstTree}\n${secondTree}\n`, 4);
+    const writer = new GitMktreeSession(scripted.session);
+    const trees = [
+      [{ mode: '100644', type: 'blob', oid: firstOid, name: 'first' }],
+      [{ mode: '100644', type: 'blob', oid: secondOid, name: 'second' }],
+    ];
+
+    await expect(writer.writeMany(trees)).resolves.toEqual([firstTree, secondTree]);
+    expect(scripted.writes).toHaveLength(4);
+    await writer.close();
   });
 
   it('rejects invalid tree mode/type pairs before changing protocol state', async () => {
@@ -160,6 +242,9 @@ describe('long-lived Git protocol sessions', () => {
     await expect(
       writer.write([{ mode: '100644', type: 'blob', oid: firstOid, name: 'valid' }])
     ).resolves.toMatch(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u);
+    await expect(writer.writeMany(Array.from({ length: 257 }, () => [])))
+      .rejects.toBeInstanceOf(InvalidArgumentError);
+    await expect(writer.writeMany([[]])).resolves.toHaveLength(1);
     await writer.close();
   });
 
@@ -167,11 +252,18 @@ describe('long-lived Git protocol sessions', () => {
     const writer = await git.openFastImportSession();
     expect(writer).toBeInstanceOf(GitFastImportSession);
     const checkpointedOid = await writer.writeBlob('checkpointed object');
+    const batchedOids = await writer.writeBlobs([
+      'first batched object',
+      new TextEncoder().encode('second batched object'),
+    ]);
 
     await writer.checkpoint();
     await expect(git.execute({ args: ['cat-file', '-p', checkpointedOid] })).resolves.toBe(
       'checkpointed object'
     );
+    await expect(
+      Promise.all(batchedOids.map((oid) => git.execute({ args: ['cat-file', '-p', oid] })))
+    ).resolves.toEqual(['first batched object', 'second batched object']);
 
     const completedOid = await writer.writeBlob(new TextEncoder().encode('completed object'));
     await writer.close();
@@ -180,6 +272,64 @@ describe('long-lived Git protocol sessions', () => {
       'completed object'
     );
     await expect(writer.writeBlob('late')).rejects.toBeInstanceOf(GitProtocolError);
+  });
+
+  it('pipelines bounded blob batches before consuming ordered marks', async () => {
+    const firstBlob = 'a'.repeat(firstOid.length);
+    const secondBlob = 'b'.repeat(firstOid.length);
+    const scripted = gatedSession(`${firstBlob}\n${secondBlob}\n`, 6);
+    const writer = new GitFastImportSession(scripted.session);
+
+    await expect(writer.writeBlobs(['first', Uint8Array.of(1, 2)])).resolves.toEqual([
+      firstBlob,
+      secondBlob,
+    ]);
+    expect(scripted.writes).toHaveLength(6);
+    await writer.close();
+  });
+
+  it('rejects invalid blob batches before changing protocol state', async () => {
+    const writer = await git.openFastImportSession();
+
+    await expect(writer.writeBlobs(Array.from({ length: 257 }, () => 'blob')))
+      .rejects.toBeInstanceOf(InvalidArgumentError);
+    await expect(writer.writeBlobs(['too large'], { maxBytes: 4 }))
+      .rejects.toBeInstanceOf(InvalidArgumentError);
+    await expect(writer.writeBlobs(['still usable'])).resolves.toHaveLength(1);
+    await writer.close();
+  });
+
+  it('preserves batch identity in a SHA-256 repository', async () => {
+    const shaRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'git-plumbing-sha256-batch-'));
+    try {
+      const shaGit = await GitPlumbing.createDefault({ cwd: shaRepo });
+      await shaGit.execute({ args: ['init', '--bare', '--object-format=sha256'] });
+      const blobs = await shaGit.openFastImportSession();
+      const blobOids = await blobs.writeBlobs(['sha256 first', 'sha256 second']);
+      await blobs.checkpoint();
+      await blobs.close();
+
+      const trees = await shaGit.openMktreeSession();
+      const treeOids = await trees.writeMany(blobOids.map((oid, index) => [{
+        mode: '100644',
+        type: 'blob',
+        oid,
+        name: `blob-${index}`,
+      }]));
+      await trees.close();
+
+      const objects = await shaGit.openCatFileSession();
+      const metadata = await objects.infoMany([...blobOids, ...treeOids]);
+      const contents = await objects.readMany(blobOids);
+      await objects.close();
+
+      expect(metadata.map(({ oid }) => oid)).toEqual([...blobOids, ...treeOids]);
+      expect(metadata.every(({ oid }) => oid.length === 64)).toBe(true);
+      expect(contents.map(({ content }) => DECODER.decode(content)))
+        .toEqual(['sha256 first', 'sha256 second']);
+    } finally {
+      fs.rmSync(shaRepo, { recursive: true, force: true });
+    }
   });
 
   it('settles timeout and termination exactly once', async () => {

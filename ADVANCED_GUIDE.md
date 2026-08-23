@@ -67,8 +67,9 @@ spawn one Git process per request:
 ```javascript
 const objects = await git.openCatFileSession();
 try {
-  const object = await objects.read(oid, { maxBytes: 4 * 1024 * 1024 });
-  processObject(object);
+  const metadata = await objects.infoMany(oids);
+  const values = await objects.readMany(oids, { maxBytes: 4 * 1024 * 1024 });
+  processObjects(metadata, values);
 } finally {
   await objects.close();
 }
@@ -87,6 +88,31 @@ The available wrappers are:
 to the total retained content, not independently to every object. A rejected
 oversized response is drained so the process remains usable. Callers handling
 objects larger than the budget should chunk them at their storage boundary.
+
+The session batch surfaces pipeline requests before consuming their ordered
+responses:
+
+```javascript
+const blobs = await git.openFastImportSession();
+const trees = await git.openMktreeSession();
+try {
+  const blobOids = await blobs.writeBlobs(payloads, {
+    maxBytes: 32 * 1024 * 1024
+  });
+  await blobs.checkpoint();
+  const treeOids = await trees.writeMany(treeEntryGroups);
+  consumeObjectIds(blobOids, treeOids);
+} finally {
+  await Promise.all([blobs.close(), trees.close()]);
+}
+```
+
+`infoMany()` accepts at most 1,000 names and 64 KiB of commands.
+`writeBlobs()` accepts at most 256 blobs and 64 MiB of content; callers may
+lower the byte ceiling. `writeMany()` accepts at most 256 trees, 65,536 total
+entries, and 64 MiB of framed input. These fixed ceilings also bound pending
+protocol responses so a batch cannot fill the child-process stdout pipe before
+the reader begins consuming it.
 
 Fast-import blobs become externally visible after `checkpoint()` or `close()`.
 Always close typed sessions in `finally`. Raw `openSession()` callers must also

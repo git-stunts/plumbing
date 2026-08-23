@@ -12,6 +12,9 @@ const MODE_TYPES = new Map([
   ['160000', 'commit'],
 ]);
 const MAX_TREE_NAME_BYTES = 8192;
+const MAX_BATCH_BYTES = 64 * 1024 * 1024;
+const MAX_BATCH_ENTRIES = 65_536;
+const MAX_BATCH_TREES = 256;
 const NUL = Uint8Array.of(0);
 
 /**
@@ -66,6 +69,63 @@ export default class GitMktreeSession {
   }
 
   /**
+   * Pipelines a bounded group of independent tree writes.
+   * @param {Array<Iterable<{mode: string, type: string, oid: string, name: string}>|AsyncIterable<{mode: string, type: string, oid: string, name: string}>>} trees
+   * @returns {Promise<ReadonlyArray<string>>}
+   */
+  async writeMany(trees) {
+    validateTrees(trees);
+    if (trees.length === 0) {
+      return Object.freeze([]);
+    }
+    return await this._serialize(async () => {
+      let protocolStarted = false;
+      let totalBytes = 0;
+      let totalEntries = 0;
+      try {
+        for (const entries of trees) {
+          validateEntries(entries, 'GitMktreeSession.writeMany');
+          for await (const entry of entries) {
+            const record = encodeEntry(entry, 'GitMktreeSession.writeMany');
+            totalEntries += 1;
+            totalBytes += record.length + 1;
+            validateBatchTotals(totalEntries, totalBytes);
+            const framed = new Uint8Array(record.length + 1);
+            framed.set(record);
+            protocolStarted = true;
+            await this._session.write(framed);
+          }
+          totalBytes += 1;
+          validateBatchTotals(totalEntries, totalBytes);
+          protocolStarted = true;
+          await this._session.write(NUL);
+        }
+        const oids = [];
+        for (let index = 0; index < trees.length; index += 1) {
+          oids.push(await this._readOid('GitMktreeSession.writeMany'));
+        }
+        return Object.freeze(oids);
+      } catch (error) {
+        if (protocolStarted) {
+          await this.terminate();
+        }
+        throw error;
+      }
+    });
+  }
+
+  async _readOid(operation) {
+    const oid = DECODER.decode(await this._reader.readLine());
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(oid)) {
+      throw new GitProtocolError(
+        `git mktree returned an invalid object identifier: ${oid}`,
+        operation
+      );
+    }
+    return oid;
+  }
+
+  /**
    * Closes input and verifies orderly process completion.
    * @returns {Promise<void>}
    */
@@ -117,46 +177,46 @@ export default class GitMktreeSession {
   }
 }
 
-function validateEntries(entries) {
+function validateEntries(entries, operation = 'GitMktreeSession.write') {
   const isIterable =
     entries !== null &&
     typeof entries === 'object' &&
     (typeof entries[Symbol.iterator] === 'function' ||
       typeof entries[Symbol.asyncIterator] === 'function');
   if (!isIterable) {
-    throw new InvalidArgumentError('entries must be iterable', 'GitMktreeSession.write');
+    throw new InvalidArgumentError('entries must be iterable', operation);
   }
   if (Array.isArray(entries)) {
     for (const entry of entries) {
-      encodeEntry(entry);
+      encodeEntry(entry, operation);
     }
   }
 }
 
-function encodeEntry(entry) {
+function encodeEntry(entry, operation = 'GitMktreeSession.write') {
   if (typeof entry !== 'object' || entry === null) {
-    throw new InvalidArgumentError('Tree entry must be an object', 'GitMktreeSession.write');
+    throw new InvalidArgumentError('Tree entry must be an object', operation);
   }
   const { mode, type, oid, name } = entry;
   if (MODE_TYPES.get(mode) !== type) {
-    throw new InvalidArgumentError('Tree entry mode or type is invalid', 'GitMktreeSession.write', {
+    throw new InvalidArgumentError('Tree entry mode or type is invalid', operation, {
       entry,
     });
   }
   if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(oid)) {
-    throw new InvalidArgumentError('Tree entry OID is invalid', 'GitMktreeSession.write', {
+    throw new InvalidArgumentError('Tree entry OID is invalid', operation, {
       entry,
     });
   }
   if (typeof name !== 'string' || name.length === 0 || name.includes('\0') || name.includes('/')) {
-    throw new InvalidArgumentError('Tree entry name is invalid', 'GitMktreeSession.write', {
+    throw new InvalidArgumentError('Tree entry name is invalid', operation, {
       entry,
     });
   }
   const header = ENCODER.encode(`${mode} ${type} ${oid}\t`);
   const encodedName = ENCODER.encode(name);
   if (encodedName.length > MAX_TREE_NAME_BYTES) {
-    throw new InvalidArgumentError('Tree entry name is too long', 'GitMktreeSession.write', {
+    throw new InvalidArgumentError('Tree entry name is too long', operation, {
       maxBytes: MAX_TREE_NAME_BYTES,
       nameBytes: encodedName.length,
     });
@@ -165,4 +225,32 @@ function encodeEntry(entry) {
   record.set(header, 0);
   record.set(encodedName, header.length);
   return record;
+}
+
+function validateTrees(trees) {
+  if (!Array.isArray(trees)) {
+    throw new InvalidArgumentError('trees must be an array', 'GitMktreeSession.writeMany');
+  }
+  if (trees.length > MAX_BATCH_TREES) {
+    throw new InvalidArgumentError(
+      `A mktree batch may contain at most ${MAX_BATCH_TREES} trees`,
+      'GitMktreeSession.writeMany',
+      { count: trees.length, maxTrees: MAX_BATCH_TREES }
+    );
+  }
+}
+
+function validateBatchTotals(entries, bytes) {
+  if (entries > MAX_BATCH_ENTRIES || bytes > MAX_BATCH_BYTES) {
+    throw new InvalidArgumentError(
+      'A mktree batch exceeds its bounded input limits',
+      'GitMktreeSession.writeMany',
+      {
+        bytes,
+        entries,
+        maxBytes: MAX_BATCH_BYTES,
+        maxEntries: MAX_BATCH_ENTRIES,
+      }
+    );
+  }
 }

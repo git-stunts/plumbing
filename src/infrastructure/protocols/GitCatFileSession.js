@@ -46,6 +46,37 @@ export default class GitCatFileSession {
   }
 
   /**
+   * Pipelines a bounded group of metadata reads.
+   * @param {string[]} objectNames
+   * @returns {Promise<ReadonlyArray<{oid: string, type: string, size: number}>>}
+   */
+  async infoMany(objectNames) {
+    const command = buildBatchCommand(
+      objectNames,
+      'info',
+      'GitCatFileSession.infoMany'
+    );
+    if (objectNames.length === 0) {
+      return Object.freeze([]);
+    }
+    return await this._serialize(async () => {
+      await this._session.write(command);
+      await this._flush();
+      const objects = [];
+      for (let index = 0; index < objectNames.length; index += 1) {
+        try {
+          const line = DECODER.decode(await this._reader.readLine());
+          objects.push(this._parseInfo(line, objectNames[index]));
+        } catch (error) {
+          await this._drainInfoBatch(objectNames, index + 1);
+          throw error;
+        }
+      }
+      return Object.freeze(objects);
+    });
+  }
+
+  /**
    * Reads one complete object.
    * @param {string} objectName
    * @param {Object} [options]
@@ -70,37 +101,17 @@ export default class GitCatFileSession {
    * @returns {Promise<ReadonlyArray<{oid: string, type: string, size: number, content: Uint8Array}>>}
    */
   async readMany(objectNames, { maxBytes = DEFAULT_MAX_BUFFER_SIZE } = {}) {
-    if (!Array.isArray(objectNames)) {
-      throw new InvalidArgumentError('objectNames must be an array', 'GitCatFileSession.readMany');
-    }
-    for (const objectName of objectNames) {
-      validateObjectName(objectName, 'GitCatFileSession.readMany');
-    }
-    if (objectNames.length > MAX_BATCH_OBJECTS) {
-      throw new InvalidArgumentError(
-        `A cat-file batch may contain at most ${MAX_BATCH_OBJECTS} objects`,
-        'GitCatFileSession.readMany',
-        { count: objectNames.length, maxObjects: MAX_BATCH_OBJECTS }
-      );
-    }
+    const command = buildBatchCommand(
+      objectNames,
+      'contents',
+      'GitCatFileSession.readMany'
+    );
     validateMaxBytes(maxBytes, 'GitCatFileSession.readMany');
     if (objectNames.length === 0) {
       return Object.freeze([]);
     }
-    const commands = objectNames.map((name) => `contents ${name}\n`);
-    const commandBytes = commands.reduce(
-      (total, command) => total + ENCODER.encode(command).length,
-      0
-    );
-    if (commandBytes > MAX_BATCH_COMMAND_BYTES) {
-      throw new InvalidArgumentError(
-        `A cat-file batch command may contain at most ${MAX_BATCH_COMMAND_BYTES} bytes`,
-        'GitCatFileSession.readMany',
-        { commandBytes, maxBytes: MAX_BATCH_COMMAND_BYTES }
-      );
-    }
     return await this._serialize(async () => {
-      await this._session.write(commands.join(''));
+      await this._session.write(command);
       await this._flush();
       const objects = [];
       let remainingBytes = maxBytes;
@@ -186,6 +197,23 @@ export default class GitCatFileSession {
     return Object.freeze({ ...info, content });
   }
 
+  async _drainInfoBatch(objectNames, startIndex) {
+    for (let index = startIndex; index < objectNames.length; index += 1) {
+      if (this._closed) {
+        return;
+      }
+      try {
+        const line = DECODER.decode(await this._reader.readLine());
+        this._parseInfo(line, objectNames[index]);
+      } catch (error) {
+        if (!isRecoverableReadError(error)) {
+          await this.terminate();
+          return;
+        }
+      }
+    }
+  }
+
   async _readTerminator(objectName) {
     const terminator = await this._reader.readExactly(1);
     if (terminator[0] !== 0x0a) {
@@ -260,6 +288,32 @@ function validateObjectName(objectName, operation) {
   ) {
     throw new InvalidArgumentError('Invalid Git object name', operation, { objectName });
   }
+}
+
+function buildBatchCommand(objectNames, verb, operation) {
+  if (!Array.isArray(objectNames)) {
+    throw new InvalidArgumentError('objectNames must be an array', operation);
+  }
+  for (const objectName of objectNames) {
+    validateObjectName(objectName, operation);
+  }
+  if (objectNames.length > MAX_BATCH_OBJECTS) {
+    throw new InvalidArgumentError(
+      `A cat-file batch may contain at most ${MAX_BATCH_OBJECTS} objects`,
+      operation,
+      { count: objectNames.length, maxObjects: MAX_BATCH_OBJECTS }
+    );
+  }
+  const command = objectNames.map((name) => `${verb} ${name}\n`).join('');
+  const commandBytes = ENCODER.encode(command).length;
+  if (commandBytes > MAX_BATCH_COMMAND_BYTES) {
+    throw new InvalidArgumentError(
+      `A cat-file batch command may contain at most ${MAX_BATCH_COMMAND_BYTES} bytes`,
+      operation,
+      { commandBytes, maxBytes: MAX_BATCH_COMMAND_BYTES }
+    );
+  }
+  return command;
 }
 
 function validateMaxBytes(maxBytes, operation) {
