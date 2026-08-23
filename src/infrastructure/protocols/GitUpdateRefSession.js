@@ -18,6 +18,7 @@ export default class GitUpdateRefSession {
     this._reader = new ByteReader(session.stdout);
     this._closed = false;
     this._closePromise = null;
+    this._terminationPromise = null;
     this._tail = Promise.resolve();
   }
 
@@ -62,8 +63,12 @@ export default class GitUpdateRefSession {
     }
     this._closed = true;
     this._closePromise = (async () => {
+      await this._tail;
+      if (this._terminationPromise !== null) {
+        await this._terminationPromise;
+        return;
+      }
       try {
-        await this._tail;
         await this._session.closeInput();
         const result = await this._session.finished;
         if (result.code !== 0) {
@@ -81,12 +86,9 @@ export default class GitUpdateRefSession {
    * @returns {Promise<void>}
    */
   async terminate() {
-    this._closed = true;
-    this._session.terminate();
-    try {
-      await this._session.finished;
-    } finally {
-      await this._reader.close();
+    const { cleanupError } = await this._finishTermination();
+    if (cleanupError !== null) {
+      throw cleanupError;
     }
   }
 
@@ -109,20 +111,35 @@ export default class GitUpdateRefSession {
   }
 
   async _poison(error) {
-    this._closed = true;
-    this._session.terminate();
-    let result = null;
-    try {
-      result = await this._session.finished;
-    } catch {
-      // Preserve the operation failure when a custom completion also rejects.
-    } finally {
-      await this._reader.close();
-    }
+    const { result } = await this._finishTermination();
     if (result !== null && result.code !== 0 && result.stderr.trim() !== '') {
       throw refProcessError(result, 'GitUpdateRefSession.update', error);
     }
     throw error;
+  }
+
+  async _finishTermination() {
+    if (this._terminationPromise !== null) {
+      return await this._terminationPromise;
+    }
+    this._closed = true;
+    this._session.terminate();
+    this._terminationPromise = (async () => {
+      let result = null;
+      let cleanupError = null;
+      try {
+        result = await this._session.finished;
+      } catch (error) {
+        cleanupError = error;
+      }
+      try {
+        await this._reader.close();
+      } catch (error) {
+        cleanupError ??= error;
+      }
+      return Object.freeze({ cleanupError, result });
+    })();
+    return await this._terminationPromise;
   }
 }
 

@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `writeMany()` operations for persistent cat-file, fast-import, and mktree
   sessions.
 - **Persistent Ref Transactions**: Added `openUpdateRefSession()` for repeated,
-  explicitly acknowledged compare-and-swap updates through one Git process.
+  explicit update-ref transactions through one Git process, with unconditional,
+  create-only, and compare-and-swap modes.
 - **Reproducible Protocol Benchmark**: Added a Docker-only SHA-256 benchmark for
   latency, process topology, stdin writes, and exact object identity.
 

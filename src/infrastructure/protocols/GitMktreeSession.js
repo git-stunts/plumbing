@@ -51,14 +51,7 @@ export default class GitMktreeSession {
         }
         protocolStarted = true;
         await this._session.write(NUL);
-        const oid = DECODER.decode(await this._reader.readLine());
-        if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(oid)) {
-          throw new GitProtocolError(
-            `git mktree returned an invalid object identifier: ${oid}`,
-            'GitMktreeSession.write'
-          );
-        }
-        return oid;
+        return await this._readOid('GitMktreeSession.write');
       } catch (error) {
         if (protocolStarted) {
           await this.terminate();

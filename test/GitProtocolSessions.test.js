@@ -477,6 +477,30 @@ describe('long-lived Git protocol sessions', () => {
     })).rejects.toBeInstanceOf(GitProtocolError);
   });
 
+  it('preserves a ref transaction failure when close runs during cleanup', async () => {
+    const scripted = gatedSession('start: ok\nprepare: nope\n', 1);
+    const writer = new GitUpdateRefSession(scripted.session);
+    let failure;
+
+    try {
+      await writer.update({
+        ref: 'refs/plumbing/test',
+        newOid: firstOid,
+        expectedOldOid: null,
+      });
+    } catch (error) {
+      failure = error;
+      await expect(writer.close()).resolves.toBeUndefined();
+    }
+
+    expect(failure).toMatchObject({
+      operation: 'GitUpdateRefSession.update',
+      details: { response: 'prepare: nope', stage: 'prepare' },
+    });
+    expect(scripted.terminateCalls()).toBe(1);
+    await writer.close();
+  });
+
   it('poisons a ref session after Git rejects compare-and-swap', async () => {
     const writer = await git.openUpdateRefSession();
     await writer.update({

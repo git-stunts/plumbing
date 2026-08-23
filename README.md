@@ -129,10 +129,11 @@ up to 256 blobs under a caller-selectable content budget capped at 64 MiB.
 batch results preserve input order.
 
 `openUpdateRefSession()` reuses one `git update-ref --stdin` process across
-explicit compare-and-swap transactions. Its `update()` method accepts
-`expectedOldOid: null` for create-only semantics, omits the check only when the
-field is `undefined`, and validates Git's ordered start/prepare/commit
-acknowledgements. A rejected or malformed transaction poisons the session.
+explicit update-ref transactions. Its `update()` method performs an
+unconditional update when `expectedOldOid` is `undefined`; `null` means
+create-only and an OID means compare-and-swap. It validates Git's ordered
+start/prepare/commit acknowledgements. A rejected or malformed transaction
+poisons the session.
 `noDeref` is explicit; on the minimum supported Git, consumers must retain any
 separate symbolic-ref safety check they require.
 

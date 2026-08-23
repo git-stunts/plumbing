@@ -1,5 +1,6 @@
 /** Reproducible Docker-only benchmark for typed persistent Git protocol operations. */
 import crypto from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +9,7 @@ import GitPlumbing, { ShellRunnerFactory } from '../index.js';
 
 ensureDocker();
 
+const MAX_BLOB_BATCH_PROTOCOL_BYTES = 64 * 1024 * 1024;
 const DEFAULTS = Object.freeze({
   batchSize: 250,
   blobBytes: 4096,
@@ -59,7 +61,7 @@ async function main() {
       generatedAt: new Date().toISOString(),
       environment,
       parameters: options,
-      scenarios: summarize(samples, options),
+      scenarios: summarize(samples),
       samples,
     });
     const json = `${JSON.stringify(report, null, 2)}\n`;
@@ -114,6 +116,12 @@ async function runSample(root, scenario, strategy, options) {
   }
   const oneShotProcesses = after.oneShotProcesses - before.oneShotProcesses;
   const sessionProcesses = after.sessionProcesses - before.sessionProcesses;
+  const stdinWrites = after.stdinWrites - before.stdinWrites;
+  const apiCalls = strategy === 'baseline' || scenario === 'update-ref'
+    ? options.objects
+    : scenario === 'fast-import'
+      ? stdinWrites - 2
+      : stdinWrites;
   return Object.freeze({
     scenario,
     strategy,
@@ -121,7 +129,8 @@ async function runSample(root, scenario, strategy, options) {
     gitProcesses: oneShotProcesses + sessionProcesses,
     oneShotProcesses,
     sessionProcesses,
-    stdinWrites: after.stdinWrites - before.stdinWrites,
+    stdinWrites,
+    apiCalls,
     identity: digestIdentifiers(result),
   });
 }
@@ -135,7 +144,7 @@ async function measureFastImport(git, input, strategy, batchSize) {
         oids.push(await writer.writeBlob(content));
       }
     } else {
-      for (const group of windows(input, batchSize)) {
+      for (const group of blobWindows(input, batchSize)) {
         oids.push(...await writer.writeBlobs(group));
       }
     }
@@ -224,7 +233,7 @@ async function prepareObjects(git, input, batchSize) {
   const writer = await git.openFastImportSession();
   const oids = [];
   try {
-    for (const group of windows(input, batchSize)) {
+    for (const group of blobWindows(input, batchSize)) {
       oids.push(...await writer.writeBlobs(group));
     }
     await writer.checkpoint();
@@ -291,11 +300,51 @@ function windows(values, size) {
   return groups;
 }
 
+function blobWindows(values, maxItems) {
+  const groups = [];
+  let group = [];
+  let groupBytes = 0;
+  for (let index = 0; index < values.length; index += 1) {
+    const content = values[index];
+    const contentBytes = typeof content === 'string'
+      ? Buffer.byteLength(content)
+      : content.byteLength;
+    const framedBytes = blobRequestByteLength(contentBytes, index + 1);
+    if (framedBytes > MAX_BLOB_BATCH_PROTOCOL_BYTES) {
+      throw new Error(
+        `One framed blob requires ${framedBytes} bytes; the shared batch ceiling is ${MAX_BLOB_BATCH_PROTOCOL_BYTES}`
+      );
+    }
+    if (
+      group.length > 0 &&
+      (group.length === maxItems || groupBytes + framedBytes > MAX_BLOB_BATCH_PROTOCOL_BYTES)
+    ) {
+      groups.push(group);
+      group = [];
+      groupBytes = 0;
+    }
+    group.push(content);
+    groupBytes += framedBytes;
+  }
+  if (group.length > 0) {
+    groups.push(group);
+  }
+  return groups;
+}
+
+function blobRequestByteLength(contentBytes, mark) {
+  return (
+    Buffer.byteLength(`blob\nmark :${mark}\ndata ${contentBytes}\n`) +
+    contentBytes +
+    Buffer.byteLength(`\nget-mark :${mark}\n`)
+  );
+}
+
 function digestIdentifiers(oids) {
   return crypto.createHash('sha256').update(oids.join('\n')).digest('hex');
 }
 
-function summarize(samples, options) {
+function summarize(samples) {
   return Object.fromEntries(SCENARIOS.map((scenario) => {
     const byStrategy = Object.fromEntries(STRATEGIES.map((strategy) => {
       const selected = samples.filter(
@@ -311,9 +360,7 @@ function summarize(samples, options) {
         ),
         sessionProcesses: uniqueValue(selected.map(({ sessionProcesses }) => sessionProcesses)),
         stdinWrites: uniqueValue(selected.map(({ stdinWrites }) => stdinWrites)),
-        apiCalls: strategy === 'baseline' || scenario === 'update-ref'
-          ? options.objects
-          : Math.ceil(options.objects / options.batchSize),
+        apiCalls: uniqueValue(selected.map(({ apiCalls }) => apiCalls)),
       })];
     }));
     const improvementPercent =
@@ -371,6 +418,12 @@ function parseArguments(args) {
   }
   if (parsed.blobBytes < 32) {
     throw new Error('--blob-bytes must be at least 32');
+  }
+  const largestFramedBlob = blobRequestByteLength(parsed.blobBytes, parsed.objects);
+  if (largestFramedBlob > MAX_BLOB_BATCH_PROTOCOL_BYTES) {
+    throw new Error(
+      `--blob-bytes produces a ${largestFramedBlob}-byte framed blob, above the shared ${MAX_BLOB_BATCH_PROTOCOL_BYTES}-byte batch ceiling`
+    );
   }
   return Object.freeze(parsed);
 }
