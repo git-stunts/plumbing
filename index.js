@@ -35,6 +35,7 @@ import CommandSession from './src/infrastructure/CommandSession.js';
 import GitCatFileSession from './src/infrastructure/protocols/GitCatFileSession.js';
 import GitFastImportSession from './src/infrastructure/protocols/GitFastImportSession.js';
 import GitMktreeSession from './src/infrastructure/protocols/GitMktreeSession.js';
+import GitUpdateRefSession from './src/infrastructure/protocols/GitUpdateRefSession.js';
 
 const CANONICAL_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
@@ -78,6 +79,7 @@ export {
   GitCatFileSession,
   GitFastImportSession,
   GitMktreeSession,
+  GitUpdateRefSession,
   CommandRetryPolicy,
   GitRepositoryService
 };
@@ -342,6 +344,24 @@ export default class GitPlumbing {
       timeout
     });
     return new GitFastImportSession(session);
+  }
+
+  /**
+   * Opens a typed `git update-ref --stdin` transaction writer.
+   * @param {Object} [options]
+   * @param {Object} [options.env]
+   * @param {number} [options.maxStderrBytes]
+   * @param {number} [options.timeout]
+   * @returns {Promise<GitUpdateRefSession>}
+   */
+  async openUpdateRefSession({ env, maxStderrBytes, timeout } = {}) {
+    const session = await this.openSession({
+      args: ['update-ref', '--stdin'],
+      env,
+      maxStderrBytes,
+      timeout
+    });
+    return new GitUpdateRefSession(session);
   }
 
   /**

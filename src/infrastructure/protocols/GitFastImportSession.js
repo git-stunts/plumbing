@@ -35,7 +35,7 @@ export default class GitFastImportSession {
     return await this._serialize(async () => {
       const mark = this._nextMark;
       this._nextMark += 1;
-      await this._writeBlobRequest(bytes, mark);
+      await this._session.write(encodeBlobRequest(bytes, mark));
       return await this._readOid();
     });
   }
@@ -54,25 +54,19 @@ export default class GitFastImportSession {
       return Object.freeze([]);
     }
     return await this._serialize(async () => {
-      const marks = [];
-      for (const bytes of blobs) {
-        const mark = this._nextMark;
-        this._nextMark += 1;
-        marks.push(mark);
-        await this._writeBlobRequest(bytes, mark);
+      const firstMark = this._nextMark;
+      const chunks = [];
+      for (let index = 0; index < blobs.length; index += 1) {
+        chunks.push(...encodeBlobRequestChunks(blobs[index], firstMark + index));
       }
+      this._nextMark += blobs.length;
+      await this._session.write(concatBytes(chunks));
       const oids = [];
-      for (let index = 0; index < marks.length; index += 1) {
+      for (let index = 0; index < blobs.length; index += 1) {
         oids.push(await this._readOid());
       }
       return Object.freeze(oids);
     });
-  }
-
-  async _writeBlobRequest(bytes, mark) {
-    await this._session.write(`blob\nmark :${mark}\ndata ${bytes.length}\n`);
-    await this._session.write(bytes);
-    await this._session.write(`\nget-mark :${mark}\n`);
   }
 
   /**
@@ -175,6 +169,29 @@ function encodeBlob(content, operation) {
     throw new InvalidArgumentError('Blob content must be a string or Uint8Array', operation);
   }
   return typeof content === 'string' ? ENCODER.encode(content) : content;
+}
+
+function encodeBlobRequest(bytes, mark) {
+  return concatBytes(encodeBlobRequestChunks(bytes, mark));
+}
+
+function encodeBlobRequestChunks(bytes, mark) {
+  return [
+    ENCODER.encode(`blob\nmark :${mark}\ndata ${bytes.length}\n`),
+    bytes,
+    ENCODER.encode(`\nget-mark :${mark}\n`),
+  ];
+}
+
+function concatBytes(chunks) {
+  const totalBytes = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const result = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
 }
 
 function prepareBlobBatch(contents, maxBytes) {

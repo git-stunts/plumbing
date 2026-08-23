@@ -39,8 +39,7 @@ export default class GitCatFileSession {
   async info(objectName) {
     validateObjectName(objectName, 'GitCatFileSession.info');
     return await this._serialize(async () => {
-      await this._session.write(`info ${objectName}\n`);
-      await this._flush();
+      await this._send(`info ${objectName}\n`);
       return this._parseInfo(DECODER.decode(await this._reader.readLine()), objectName);
     });
   }
@@ -60,8 +59,7 @@ export default class GitCatFileSession {
       return Object.freeze([]);
     }
     return await this._serialize(async () => {
-      await this._session.write(command);
-      await this._flush();
+      await this._send(command);
       const objects = [];
       for (let index = 0; index < objectNames.length; index += 1) {
         try {
@@ -87,8 +85,7 @@ export default class GitCatFileSession {
     validateObjectName(objectName, 'GitCatFileSession.read');
     validateMaxBytes(maxBytes, 'GitCatFileSession.read');
     return await this._serialize(async () => {
-      await this._session.write(`contents ${objectName}\n`);
-      await this._flush();
+      await this._send(`contents ${objectName}\n`);
       return await this._readResponse(objectName, maxBytes);
     });
   }
@@ -111,8 +108,7 @@ export default class GitCatFileSession {
       return Object.freeze([]);
     }
     return await this._serialize(async () => {
-      await this._session.write(command);
-      await this._flush();
+      await this._send(command);
       const objects = [];
       let remainingBytes = maxBytes;
       for (let index = 0; index < objectNames.length; index += 1) {
@@ -247,10 +243,8 @@ export default class GitCatFileSession {
     return Object.freeze({ oid: fields[0], type: fields[1], size });
   }
 
-  async _flush() {
-    if (this._buffered) {
-      await this._session.write('flush\n');
-    }
+  async _send(command) {
+    await this._session.write(this._buffered ? `${command}flush\n` : command);
   }
 
   async _serialize(operation) {

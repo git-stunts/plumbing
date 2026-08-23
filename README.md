@@ -120,17 +120,35 @@ fails with `OBJECT_BUFFER_LIMIT_EXCEEDED`, and the session remains aligned for
 later requests. The default budget is 10 MiB.
 
 Additional typed protocols are available through `openMktreeSession()` and
-`openFastImportSession()`. Tree entries may be supplied as an iterable or async
-iterable, so the wrapper does not construct a second whole-tree buffer.
-`writeMany()` pipelines up to 256 independent trees, while `writeBlobs()`
-pipelines up to 256 blobs under a caller-selectable content budget capped at
-64 MiB. `infoMany()` accepts up to 1,000 object names under a 64 KiB command
-budget. All batch results preserve input order.
+`openFastImportSession()`. A single tree supplied to `write()` remains iterable
+or async iterable and is streamed without constructing a second whole-tree
+buffer. `writeMany()` assembles one bounded framed write for up to 256
+independent trees, while `writeBlobs()` assembles one bounded protocol write for
+up to 256 blobs under a caller-selectable content budget capped at 64 MiB.
+`infoMany()` accepts up to 1,000 object names under a 64 KiB command budget. All
+batch results preserve input order.
+
+`openUpdateRefSession()` reuses one `git update-ref --stdin` process across
+explicit compare-and-swap transactions. Its `update()` method accepts
+`expectedOldOid: null` for create-only semantics, omits the check only when the
+field is `undefined`, and validates Git's ordered start/prepare/commit
+acknowledgements. A rejected or malformed transaction poisons the session.
+`noDeref` is explicit; on the minimum supported Git, consumers must retain any
+separate symbolic-ref safety check they require.
 
 Sessions have no implicit timeout. Their owner must call `close()` for orderly
 completion or `terminate()`/`abort()` when abandoning work. Plumbing owns the
 process and Git protocol mechanics only; callers such as `@git-stunts/git-cas`
 own pooling, chunking, caching, retention, and eviction policy.
+
+The Docker-only microbenchmark compares one-at-a-time operations with bounded
+batch windows or a persistent ref session against fresh SHA-256 repositories.
+It records elapsed time, Git process topology, stdin write count, and exact
+object-identity witnesses:
+
+```bash
+docker compose run --build --rm node-test npm run benchmark:protocol-sessions
+```
 
 ## 📖 Deep Dives
 

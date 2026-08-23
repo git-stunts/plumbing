@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Bounded Protocol Batches**: Added ordered `infoMany()`, `writeBlobs()`, and
+  `writeMany()` operations for persistent cat-file, fast-import, and mktree
+  sessions.
+- **Persistent Ref Transactions**: Added `openUpdateRefSession()` for repeated,
+  explicitly acknowledged compare-and-swap updates through one Git process.
+- **Reproducible Protocol Benchmark**: Added a Docker-only SHA-256 benchmark for
+  latency, process topology, stdin writes, and exact object identity.
+
+### Changed
+
+- **Single-Write Batch Framing**: Bounded object and tree groups now enter Git
+  through one backpressure-aware write after complete preflight validation.
+
 ## [3.2.0] - 2026-07-19
 
 ### Added

@@ -83,6 +83,8 @@ The available wrappers are:
   `git mktree --batch -z`.
 - `openFastImportSession()`: Caller-bounded blob writes and explicit checkpoints
   through `git fast-import`.
+- `openUpdateRefSession()`: Repeated explicit compare-and-swap transactions
+  through `git update-ref --stdin`.
 
 `read()` buffers at most its `maxBytes` budget. `readMany()` applies that budget
 to the total retained content, not independently to every object. A rejected
@@ -110,9 +112,11 @@ try {
 `infoMany()` accepts at most 1,000 names and 64 KiB of commands.
 `writeBlobs()` accepts at most 256 blobs and 64 MiB of content; callers may
 lower the byte ceiling. `writeMany()` accepts at most 256 trees, 65,536 total
-entries, and 64 MiB of framed input. These fixed ceilings also bound pending
-protocol responses so a batch cannot fill the child-process stdout pipe before
-the reader begins consuming it.
+entries, and 64 MiB of framed input. The write batches are assembled into one
+bounded stdin chunk before protocol state changes; this both gives validation
+failures a reusable-session boundary and removes per-object JavaScript writes.
+These fixed ceilings also bound pending protocol responses so a batch cannot
+fill the child-process stdout pipe before the reader begins consuming it.
 
 Fast-import blobs become externally visible after `checkpoint()` or `close()`.
 Always close typed sessions in `finally`. Raw `openSession()` callers must also
@@ -121,6 +125,15 @@ await `session.finished`.
 
 These wrappers do not pool themselves. A higher storage layer decides whether
 to reuse, expire, or replace a session and owns all cache and retention policy.
+
+Ref transactions validate `start: ok`, `prepare: ok`, and `commit: ok` before
+returning. A CAS rejection ends the Git process and poisons the typed session;
+the owning storage layer decides whether and when to open a replacement. Passing
+`expectedOldOid: null` requires the ref to be absent, while `undefined` requests
+an unconditional update. Set `noDeref: true` only when overwriting the named ref
+itself is intended. Git versions in the minimum support range do not expose the
+newer `symref-verify` protocol command, so a consumer that forbids symbolic refs
+must keep its own preflight rather than treating `noDeref` as a type check.
 
 ## 4. Resilience & Retry Policies
 

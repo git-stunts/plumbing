@@ -6,6 +6,7 @@ import GitPlumbing, {
   GitCatFileSession,
   GitFastImportSession,
   GitMktreeSession,
+  GitUpdateRefSession,
 } from '../index.js';
 import GitPlumbingError from '../src/domain/errors/GitPlumbingError.js';
 import GitObjectMissingError from '../src/domain/errors/GitObjectMissingError.js';
@@ -44,6 +45,7 @@ function scriptedSession(output) {
 function gatedSession(output, releaseAfterWrites) {
   let finish;
   let released = false;
+  let terminateCalls = 0;
   let stdoutController;
   const writes = [];
   const finished = new Promise((resolve) => {
@@ -68,11 +70,12 @@ function gatedSession(output, releaseAfterWrites) {
       finish({ code: 0, stderr: '', terminated: false, timedOut: false });
     },
     terminate: () => {
+      terminateCalls += 1;
       stdoutController.close();
       finish({ code: 1, stderr: '', terminated: true, timedOut: false });
     },
   });
-  return { session, writes };
+  return { session, writes, terminateCalls: () => terminateCalls };
 }
 
 describe('long-lived Git protocol sessions', () => {
@@ -124,17 +127,17 @@ describe('long-lived Git protocol sessions', () => {
 
   it('pipelines ordered metadata batches before consuming responses', async () => {
     const output = `${firstOid} blob 12\n${secondOid} blob 13\n`;
-    const scripted = gatedSession(output, 2);
+    const scripted = gatedSession(output, 1);
     const reader = new GitCatFileSession(scripted.session);
 
     await expect(reader.infoMany([firstOid, secondOid])).resolves.toEqual([
       { oid: firstOid, type: 'blob', size: 12 },
       { oid: secondOid, type: 'blob', size: 13 },
     ]);
+    expect(scripted.writes).toHaveLength(1);
     expect(DECODER.decode(scripted.writes[0])).toBe(
-      `info ${firstOid}\ninfo ${secondOid}\n`
+      `info ${firstOid}\ninfo ${secondOid}\nflush\n`
     );
-    expect(DECODER.decode(scripted.writes[1])).toBe('flush\n');
     await reader.close();
   });
 
@@ -195,6 +198,19 @@ describe('long-lived Git protocol sessions', () => {
     await expect(reader.read(firstOid)).rejects.toBeInstanceOf(GitProtocolError);
   });
 
+  it('poisons a metadata batch when draining finds malformed protocol', async () => {
+    const missingOid = '0'.repeat(firstOid.length);
+    const malformedOid = '1'.repeat(firstOid.length);
+    const scripted = scriptedSession(`${missingOid} missing\nnot-an-oid blob 1\n`);
+    const reader = new GitCatFileSession(scripted.session);
+
+    await expect(
+      reader.infoMany([missingOid, malformedOid, firstOid])
+    ).rejects.toBeInstanceOf(GitObjectMissingError);
+    expect(scripted.terminateCalls()).toBe(1);
+    await expect(reader.info(firstOid)).rejects.toBeInstanceOf(GitProtocolError);
+  });
+
   it('writes NUL-framed trees through one mktree process', async () => {
     const writer = await git.openMktreeSession();
     expect(writer).toBeInstanceOf(GitMktreeSession);
@@ -222,7 +238,7 @@ describe('long-lived Git protocol sessions', () => {
   it('pipelines bounded tree batches before consuming ordered OIDs', async () => {
     const firstTree = 'a'.repeat(firstOid.length);
     const secondTree = 'b'.repeat(firstOid.length);
-    const scripted = gatedSession(`${firstTree}\n${secondTree}\n`, 4);
+    const scripted = gatedSession(`${firstTree}\n${secondTree}\n`, 1);
     const writer = new GitMktreeSession(scripted.session);
     const trees = [
       [{ mode: '100644', type: 'blob', oid: firstOid, name: 'first' }],
@@ -230,8 +246,18 @@ describe('long-lived Git protocol sessions', () => {
     ];
 
     await expect(writer.writeMany(trees)).resolves.toEqual([firstTree, secondTree]);
-    expect(scripted.writes).toHaveLength(4);
+    expect(scripted.writes).toHaveLength(1);
     await writer.close();
+  });
+
+  it('poisons a tree batch after a malformed ordered response', async () => {
+    const firstTree = 'a'.repeat(firstOid.length);
+    const scripted = gatedSession(`${firstTree}\nnot-an-oid\n`, 1);
+    const writer = new GitMktreeSession(scripted.session);
+
+    await expect(writer.writeMany([[], []])).rejects.toBeInstanceOf(GitProtocolError);
+    expect(scripted.terminateCalls()).toBe(1);
+    await expect(writer.write([])).rejects.toBeInstanceOf(GitProtocolError);
   });
 
   it('rejects invalid tree mode/type pairs before changing protocol state', async () => {
@@ -244,6 +270,10 @@ describe('long-lived Git protocol sessions', () => {
     ).resolves.toMatch(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u);
     await expect(writer.writeMany(Array.from({ length: 257 }, () => [])))
       .rejects.toBeInstanceOf(InvalidArgumentError);
+    await expect(writer.writeMany([
+      [{ mode: '100644', type: 'blob', oid: firstOid, name: 'valid' }],
+      [{ mode: '100755', type: 'tree', oid: firstOid, name: 'invalid' }],
+    ])).rejects.toBeInstanceOf(InvalidArgumentError);
     await expect(writer.writeMany([[]])).resolves.toHaveLength(1);
     await writer.close();
   });
@@ -277,15 +307,27 @@ describe('long-lived Git protocol sessions', () => {
   it('pipelines bounded blob batches before consuming ordered marks', async () => {
     const firstBlob = 'a'.repeat(firstOid.length);
     const secondBlob = 'b'.repeat(firstOid.length);
-    const scripted = gatedSession(`${firstBlob}\n${secondBlob}\n`, 6);
+    const scripted = gatedSession(`${firstBlob}\n${secondBlob}\n`, 1);
     const writer = new GitFastImportSession(scripted.session);
 
     await expect(writer.writeBlobs(['first', Uint8Array.of(1, 2)])).resolves.toEqual([
       firstBlob,
       secondBlob,
     ]);
-    expect(scripted.writes).toHaveLength(6);
+    expect(scripted.writes).toHaveLength(1);
     await writer.close();
+  });
+
+  it('poisons a blob batch after a malformed ordered response', async () => {
+    const firstBlob = 'a'.repeat(firstOid.length);
+    const scripted = gatedSession(`${firstBlob}\nnot-an-oid\n`, 1);
+    const writer = new GitFastImportSession(scripted.session);
+
+    await expect(writer.writeBlobs(['first', 'second'])).rejects.toBeInstanceOf(
+      GitProtocolError
+    );
+    expect(scripted.terminateCalls()).toBe(1);
+    await expect(writer.writeBlob('late')).rejects.toBeInstanceOf(GitProtocolError);
   });
 
   it('rejects invalid blob batches before changing protocol state', async () => {
@@ -323,13 +365,143 @@ describe('long-lived Git protocol sessions', () => {
       const contents = await objects.readMany(blobOids);
       await objects.close();
 
+      const refs = await shaGit.openUpdateRefSession();
+      await refs.update({
+        ref: 'refs/plumbing/sha256-session',
+        newOid: treeOids[0],
+        expectedOldOid: null,
+      });
+      await refs.update({
+        ref: 'refs/plumbing/sha256-session',
+        newOid: treeOids[1],
+        expectedOldOid: treeOids[0],
+        noDeref: true,
+      });
+      await refs.close();
+
       expect(metadata.map(({ oid }) => oid)).toEqual([...blobOids, ...treeOids]);
       expect(metadata.every(({ oid }) => oid.length === 64)).toBe(true);
       expect(contents.map(({ content }) => DECODER.decode(content)))
         .toEqual(['sha256 first', 'sha256 second']);
+      await expect(shaGit.execute({
+        args: ['rev-parse', 'refs/plumbing/sha256-session'],
+      })).resolves.toBe(treeOids[1]);
     } finally {
       fs.rmSync(shaRepo, { recursive: true, force: true });
     }
+  });
+
+  it('reuses one update-ref process across explicit CAS transactions', async () => {
+    const writer = await git.openUpdateRefSession();
+    expect(writer).toBeInstanceOf(GitUpdateRefSession);
+
+    await writer.update({
+      ref: 'refs/plumbing/reusable-session',
+      newOid: firstOid,
+      expectedOldOid: null,
+    });
+    await writer.update({
+      ref: 'refs/plumbing/reusable-session',
+      newOid: secondOid,
+      expectedOldOid: firstOid,
+      noDeref: true,
+    });
+    await writer.close();
+    await writer.close();
+
+    await expect(git.execute({
+      args: ['rev-parse', 'refs/plumbing/reusable-session'],
+    })).resolves.toBe(secondOid);
+  });
+
+  it('frames one write per acknowledged ref transaction', async () => {
+    const statuses = 'start: ok\nprepare: ok\ncommit: ok\n'.repeat(2);
+    const scripted = gatedSession(statuses, 1);
+    const writer = new GitUpdateRefSession(scripted.session);
+
+    await writer.update({ ref: 'refs/plumbing/test', newOid: firstOid, expectedOldOid: null });
+    await writer.update({
+      ref: 'refs/plumbing/test',
+      newOid: secondOid,
+      expectedOldOid: firstOid,
+      noDeref: true,
+    });
+
+    expect(scripted.writes).toHaveLength(2);
+    expect(DECODER.decode(scripted.writes[0])).toBe(
+      `start\nupdate refs/plumbing/test ${firstOid} ${'0'.repeat(firstOid.length)}\nprepare\ncommit\n`
+    );
+    expect(DECODER.decode(scripted.writes[1])).toBe(
+      `start\noption no-deref\nupdate refs/plumbing/test ${secondOid} ${firstOid}\nprepare\ncommit\n`
+    );
+    await writer.close();
+  });
+
+  it('rejects invalid ref transactions before changing protocol state', async () => {
+    const scripted = gatedSession('start: ok\nprepare: ok\ncommit: ok\n', 1);
+    const writer = new GitUpdateRefSession(scripted.session);
+
+    await expect(writer.update({
+      ref: 'refs/plumbing/bad ref',
+      newOid: firstOid,
+    })).rejects.toBeInstanceOf(InvalidArgumentError);
+    await expect(writer.update({
+      ref: 'refs/plumbing/test',
+      newOid: firstOid,
+      expectedOldOid: 'a'.repeat(64),
+    })).rejects.toBeInstanceOf(InvalidArgumentError);
+    expect(scripted.writes).toHaveLength(0);
+    await expect(writer.update({
+      ref: 'refs/plumbing/test',
+      newOid: firstOid,
+      expectedOldOid: null,
+    })).resolves.toBeUndefined();
+    expect(scripted.writes).toHaveLength(1);
+    await writer.close();
+  });
+
+  it('poisons a ref session after malformed acknowledgement', async () => {
+    const scripted = gatedSession('start: ok\nprepare: nope\n', 1);
+    const writer = new GitUpdateRefSession(scripted.session);
+
+    await expect(writer.update({
+      ref: 'refs/plumbing/test',
+      newOid: firstOid,
+      expectedOldOid: null,
+    })).rejects.toBeInstanceOf(GitProtocolError);
+    expect(scripted.terminateCalls()).toBe(1);
+    await expect(writer.update({
+      ref: 'refs/plumbing/test',
+      newOid: secondOid,
+      expectedOldOid: firstOid,
+    })).rejects.toBeInstanceOf(GitProtocolError);
+  });
+
+  it('poisons a ref session after Git rejects compare-and-swap', async () => {
+    const writer = await git.openUpdateRefSession();
+    await writer.update({
+      ref: 'refs/plumbing/rejected-session',
+      newOid: firstOid,
+      expectedOldOid: null,
+    });
+
+    let rejection;
+    try {
+      await writer.update({
+        ref: 'refs/plumbing/rejected-session',
+        newOid: secondOid,
+        expectedOldOid: secondOid,
+      });
+    } catch (error) {
+      rejection = error;
+    }
+    expect(rejection).toBeInstanceOf(GitProtocolError);
+    expect(Number.isInteger(rejection.details.result.code)).toBe(true);
+    await expect(writer.update({
+      ref: 'refs/plumbing/rejected-session',
+      newOid: secondOid,
+      expectedOldOid: firstOid,
+    })).rejects.toBeInstanceOf(GitProtocolError);
   });
 
   it('settles timeout and termination exactly once', async () => {

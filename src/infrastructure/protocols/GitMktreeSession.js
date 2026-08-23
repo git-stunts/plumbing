@@ -80,26 +80,10 @@ export default class GitMktreeSession {
     }
     return await this._serialize(async () => {
       let protocolStarted = false;
-      let totalBytes = 0;
-      let totalEntries = 0;
       try {
-        for (const entries of trees) {
-          validateEntries(entries, 'GitMktreeSession.writeMany');
-          for await (const entry of entries) {
-            const record = encodeEntry(entry, 'GitMktreeSession.writeMany');
-            totalEntries += 1;
-            totalBytes += record.length + 1;
-            validateBatchTotals(totalEntries, totalBytes);
-            const framed = new Uint8Array(record.length + 1);
-            framed.set(record);
-            protocolStarted = true;
-            await this._session.write(framed);
-          }
-          totalBytes += 1;
-          validateBatchTotals(totalEntries, totalBytes);
-          protocolStarted = true;
-          await this._session.write(NUL);
-        }
+        const payload = await prepareTreeBatch(trees);
+        protocolStarted = true;
+        await this._session.write(payload);
         const oids = [];
         for (let index = 0; index < trees.length; index += 1) {
           oids.push(await this._readOid('GitMktreeSession.writeMany'));
@@ -178,6 +162,15 @@ export default class GitMktreeSession {
 }
 
 function validateEntries(entries, operation = 'GitMktreeSession.write') {
+  assertEntriesIterable(entries, operation);
+  if (Array.isArray(entries)) {
+    for (const entry of entries) {
+      encodeEntry(entry, operation);
+    }
+  }
+}
+
+function assertEntriesIterable(entries, operation) {
   const isIterable =
     entries !== null &&
     typeof entries === 'object' &&
@@ -185,11 +178,6 @@ function validateEntries(entries, operation = 'GitMktreeSession.write') {
       typeof entries[Symbol.asyncIterator] === 'function');
   if (!isIterable) {
     throw new InvalidArgumentError('entries must be iterable', operation);
-  }
-  if (Array.isArray(entries)) {
-    for (const entry of entries) {
-      encodeEntry(entry, operation);
-    }
   }
 }
 
@@ -238,6 +226,36 @@ function validateTrees(trees) {
       { count: trees.length, maxTrees: MAX_BATCH_TREES }
     );
   }
+}
+
+async function prepareTreeBatch(trees) {
+  const chunks = [];
+  let totalBytes = 0;
+  let totalEntries = 0;
+  for (const entries of trees) {
+    assertEntriesIterable(entries, 'GitMktreeSession.writeMany');
+    for await (const entry of entries) {
+      const record = encodeEntry(entry, 'GitMktreeSession.writeMany');
+      totalEntries += 1;
+      totalBytes += record.length + 1;
+      validateBatchTotals(totalEntries, totalBytes);
+      chunks.push(record, NUL);
+    }
+    totalBytes += 1;
+    validateBatchTotals(totalEntries, totalBytes);
+    chunks.push(NUL);
+  }
+  return concatBytes(chunks, totalBytes);
+}
+
+function concatBytes(chunks, totalBytes) {
+  const result = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
 }
 
 function validateBatchTotals(entries, bytes) {
