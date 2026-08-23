@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **User Git Configuration Reaches Git**: `EnvironmentPolicy` filtered out every
+  variable git uses to locate the operator's configuration, so the spawned
+  process could not read `~/.gitconfig`. Git fell back to inventing an identity
+  from the system account and hostname, and commits were attributed to addresses
+  such as `user@laptop.local` that exist nowhere and verify against nothing,
+  while the operator's configured identity sat unread on disk. `HOME`,
+  `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL` and `USERPROFILE` now pass through.
+
+  Locating configuration is not the same as injecting it: `GIT_CONFIG_PARAMETERS`,
+  `GIT_EXEC_PATH` and `GIT_TEMPLATE_DIR` remain blocked, so a caller still cannot
+  push settings into the process directly.
+
+  Callers that relied on git being unable to see user configuration — expecting a
+  fixed synthetic author, or an environment where `core.*` settings could not
+  apply — will observe different behavior and should pass `GIT_AUTHOR_*` /
+  `GIT_COMMITTER_*` explicitly, which continue to take precedence.
+
 ## [3.2.0] - 2026-07-19
 
 ### Added
