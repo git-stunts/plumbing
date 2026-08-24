@@ -15,8 +15,9 @@
  * ordinary git behaviour: without it git cannot read ~/.gitconfig, invents an
  * identity from the system account and hostname, and writes commits attributed
  * to an address that exists nowhere and verifies against nothing. The second
- * stays blocked, because GIT_CONFIG_PARAMETERS and friends push settings into
- * the process directly rather than pointing at a file the operator owns.
+ * stays blocked: configuration-discovery paths are accepted only from the
+ * runner's inherited environment, while GIT_CONFIG_PARAMETERS and friends are
+ * never accepted.
  */
 export default class EnvironmentPolicy {
   /**
@@ -41,8 +42,8 @@ export default class EnvironmentPolicy {
     // Configuration discovery: where git looks for the operator's own config.
     // HOME finds ~/.gitconfig, XDG_CONFIG_HOME finds ~/.config/git/config,
     // GIT_CONFIG_GLOBAL names the file outright, and USERPROFILE is how a home
-    // directory is resolved on Windows. Runners accept GIT_CONFIG_GLOBAL only
-    // from their inherited environment, never from per-call overrides.
+    // directory is resolved on Windows. Runners accept these paths only from
+    // their inherited environment, never from per-call overrides.
     'HOME',
     'XDG_CONFIG_HOME',
     'GIT_CONFIG_GLOBAL',
@@ -59,6 +60,12 @@ export default class EnvironmentPolicy {
    * @private
    */
   static _BLOCKED_KEYS = ['GIT_CONFIG_PARAMETERS', 'GIT_EXEC_PATH', 'GIT_TEMPLATE_DIR'];
+
+  /**
+   * Configuration-discovery paths trusted only when inherited by a runner.
+   * @private
+   */
+  static _CONFIG_DISCOVERY_KEYS = ['HOME', 'XDG_CONFIG_HOME', 'GIT_CONFIG_GLOBAL', 'USERPROFILE'];
 
   /**
    * Filters the provided environment object based on the whitelist and blacklist.
@@ -85,14 +92,16 @@ export default class EnvironmentPolicy {
   /**
    * Filters caller-provided per-command environment overrides.
    *
-   * The runner may inherit GIT_CONFIG_GLOBAL from its trusted process
-   * environment, but a caller must not replace it with an arbitrary file.
+   * A runner may inherit configuration-discovery paths from its trusted
+   * process environment, but a caller must not redirect them.
    * @param {Object} env - Caller-provided environment overrides.
    * @returns {Object} Sanitized per-command overrides.
    */
   static filterOverrides(env = {}) {
     const sanitized = EnvironmentPolicy.filter(env);
-    delete sanitized.GIT_CONFIG_GLOBAL;
+    for (const key of EnvironmentPolicy._CONFIG_DISCOVERY_KEYS) {
+      delete sanitized[key];
+    }
     return sanitized;
   }
 }

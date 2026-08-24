@@ -25,9 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Trusted Global Git Configuration**: Shell runners continue to inherit an
-  operator's `GIT_CONFIG_GLOBAL`, but per-call environment overrides can no
-  longer replace it with a caller-selected file.
+- **Trusted Git Configuration Discovery**: Shell runners continue to inherit an
+  operator's `HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, and `USERPROFILE`,
+  but per-call environment overrides can no longer redirect those paths to
+  caller-selected configuration.
 
 - **Benchmark Output Paths**: Protocol benchmark option parsing now preserves
   equals signs in values.
@@ -49,11 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the system account and hostname, and commits were attributed to addresses
   such as `user@laptop.local` that exist nowhere and verify against nothing,
   while the operator's configured identity sat unread on disk. `HOME`,
-  `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL` and `USERPROFILE` now pass through.
+  `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL` and `USERPROFILE` now pass through from
+  the shell runner's inherited environment.
 
-  Locating configuration is not the same as injecting it: `GIT_CONFIG_PARAMETERS`,
-  `GIT_EXEC_PATH` and `GIT_TEMPLATE_DIR` remain blocked, so a caller still cannot
-  push settings into the process directly.
+  Locating configuration is not the same as injecting it: per-call overrides
+  for those discovery paths, `GIT_CONFIG_PARAMETERS`, `GIT_EXEC_PATH` and
+  `GIT_TEMPLATE_DIR` remain blocked, so a caller still cannot push settings into
+  the process directly.
 
   Callers that relied on git being unable to see user configuration — expecting a
   fixed synthetic author, or an environment where `core.*` settings could not

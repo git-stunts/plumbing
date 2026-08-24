@@ -6,7 +6,7 @@ describe('EnvironmentPolicy', () => {
       PATH: '/usr/bin',
       DANGEROUS_VAR: 'hack',
       GIT_AUTHOR_NAME: 'James Ross',
-      LANG: 'en_US.UTF-8'
+      LANG: 'en_US.UTF-8',
     };
 
     const filtered = EnvironmentPolicy.filter(env);
@@ -14,7 +14,7 @@ describe('EnvironmentPolicy', () => {
     expect(filtered).toEqual({
       PATH: '/usr/bin',
       GIT_AUTHOR_NAME: 'James Ross',
-      LANG: 'en_US.UTF-8'
+      LANG: 'en_US.UTF-8',
     });
     expect(filtered.DANGEROUS_VAR).toBeUndefined();
   });
@@ -22,7 +22,7 @@ describe('EnvironmentPolicy', () => {
   it('explicitly blocks GIT_CONFIG_PARAMETERS', () => {
     const env = {
       GIT_AUTHOR_NAME: 'James Ross',
-      GIT_CONFIG_PARAMETERS: "'user.name=attacker'"
+      GIT_CONFIG_PARAMETERS: "'user.name=attacker'",
     };
 
     const filtered = EnvironmentPolicy.filter(env);
@@ -42,7 +42,7 @@ describe('EnvironmentPolicy', () => {
       LANG: 'lang',
       LC_ALL: 'all',
       LC_CTYPE: 'ctype',
-      LC_MESSAGES: 'messages'
+      LC_MESSAGES: 'messages',
     };
 
     const filtered = EnvironmentPolicy.filter(env);
@@ -64,7 +64,7 @@ describe('EnvironmentPolicy', () => {
     const env = {
       HOME: '/home/operator',
       XDG_CONFIG_HOME: '/home/operator/.config',
-      GIT_CONFIG_GLOBAL: '/home/operator/.gitconfig'
+      GIT_CONFIG_GLOBAL: '/home/operator/.gitconfig',
     };
 
     const filtered = EnvironmentPolicy.filter(env);
@@ -86,12 +86,24 @@ describe('EnvironmentPolicy', () => {
       HOME: '/home/operator',
       GIT_CONFIG_PARAMETERS: "'user.name=attacker'",
       GIT_EXEC_PATH: '/tmp/evil',
-      GIT_TEMPLATE_DIR: '/tmp/evil'
+      GIT_TEMPLATE_DIR: '/tmp/evil',
     });
 
     expect(filtered.HOME).toBe('/home/operator');
     expect(filtered.GIT_CONFIG_PARAMETERS).toBeUndefined();
     expect(filtered.GIT_EXEC_PATH).toBeUndefined();
     expect(filtered.GIT_TEMPLATE_DIR).toBeUndefined();
+  });
+
+  it('keeps configuration-discovery paths out of caller overrides', () => {
+    const filtered = EnvironmentPolicy.filterOverrides({
+      HOME: '/tmp/caller-home',
+      XDG_CONFIG_HOME: '/tmp/caller-xdg',
+      GIT_CONFIG_GLOBAL: '/tmp/caller.gitconfig',
+      USERPROFILE: 'C:\\Users\\caller',
+      GIT_AUTHOR_NAME: 'Caller Identity',
+    });
+
+    expect(filtered).toEqual({ GIT_AUTHOR_NAME: 'Caller Identity' });
   });
 });
