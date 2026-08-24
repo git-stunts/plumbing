@@ -3,16 +3,26 @@
  */
 
 /**
- * EnvironmentPolicy defines which environment variables are safe to pass 
+ * EnvironmentPolicy defines which environment variables are safe to pass
  * to the underlying Git process.
- * 
- * It whitelists essential variables for identity and localization while
- * explicitly blocking variables that could override security settings.
+ *
+ * It whitelists essential variables for identity, configuration discovery and
+ * localization while explicitly blocking variables that could override security
+ * settings.
+ *
+ * The distinction it draws is between letting git *find* the operator's
+ * configuration and letting a caller *inject* configuration. The first is
+ * ordinary git behaviour: without it git cannot read ~/.gitconfig, invents an
+ * identity from the system account and hostname, and writes commits attributed
+ * to an address that exists nowhere and verifies against nothing. The second
+ * stays blocked, because GIT_CONFIG_PARAMETERS and friends push settings into
+ * the process directly rather than pointing at a file the operator owns.
  */
 export default class EnvironmentPolicy {
   /**
    * List of environment variables allowed to be passed to the git process.
-   * Whitelists identity (GIT_AUTHOR_*, GIT_COMMITTER_*) and localization (LANG, LC_ALL).
+   * Whitelists identity (GIT_AUTHOR_*, GIT_COMMITTER_*), the paths git uses to
+   * locate user configuration, and localization (LANG, LC_ALL).
    * @private
    */
   static _ALLOWED_KEYS = [
@@ -28,6 +38,14 @@ export default class EnvironmentPolicy {
     'GIT_COMMITTER_EMAIL',
     'GIT_COMMITTER_DATE',
     'GIT_COMMITTER_TZ',
+    // Configuration discovery: where git looks for the operator's own config.
+    // HOME finds ~/.gitconfig, XDG_CONFIG_HOME finds ~/.config/git/config,
+    // GIT_CONFIG_GLOBAL names the file outright, and USERPROFILE is how a home
+    // directory is resolved on Windows.
+    'HOME',
+    'XDG_CONFIG_HOME',
+    'GIT_CONFIG_GLOBAL',
+    'USERPROFILE',
     // Localization & Encoding
     'LANG',
     'LC_ALL',
