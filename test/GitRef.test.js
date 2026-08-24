@@ -72,9 +72,11 @@ describe('GitRef', () => {
       expect(() => new GitRef(INVALID_REF_CONSECUTIVE_SLASHES)).toThrow();
     });
 
-    it.each(INVALID_REF_PATHS)('throws error for Git-incompatible path %s', (ref) => {
-      expect(() => new GitRef(ref)).toThrow(ValidationError);
-    });
+    for (const ref of INVALID_REF_PATHS) {
+      it(`throws error for Git-incompatible path ${ref}`, () => {
+        expect(() => new GitRef(ref)).toThrow(ValidationError);
+      });
+    }
 
     it("allows '@' if it doesn't form reflog sequence", () => {
       expect(() => new GitRef('refs/heads/user@feature')).not.toThrow();
