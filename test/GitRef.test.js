@@ -29,7 +29,9 @@ describe('GitRef', () => {
 
     it('throws error for invalid reference string', () => {
       expect(() => new GitRef(INVALID_REF_DOT_START)).toThrow(ValidationError);
-      expect(() => new GitRef(INVALID_REF_DOT_START)).toThrow('Invalid Git reference: .refs/heads/main');
+      expect(() => new GitRef(INVALID_REF_DOT_START)).toThrow(
+        'Invalid Git reference: .refs/heads/main'
+      );
     });
 
     it('throws error for reference starting with dot', () => {
@@ -115,7 +117,9 @@ describe('GitRef', () => {
     });
 
     it('throws error for invalid string', () => {
-      expect(() => GitRef.fromString(INVALID_REF_DOT_START)).toThrow('Invalid Git reference: .refs/heads/main');
+      expect(() => GitRef.fromString(INVALID_REF_DOT_START)).toThrow(
+        'Invalid Git reference: .refs/heads/main'
+      );
     });
   });
 

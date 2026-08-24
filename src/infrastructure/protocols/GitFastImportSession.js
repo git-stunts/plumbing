@@ -194,10 +194,7 @@ function concatBytes(chunks) {
 
 function prepareBlobBatch(contents, maxBytes) {
   if (!Array.isArray(contents)) {
-    throw new InvalidArgumentError(
-      'contents must be an array',
-      'GitFastImportSession.writeBlobs'
-    );
+    throw new InvalidArgumentError('contents must be an array', 'GitFastImportSession.writeBlobs');
   }
   if (contents.length > MAX_BATCH_OBJECTS) {
     throw new InvalidArgumentError(
@@ -213,9 +210,7 @@ function prepareBlobBatch(contents, maxBytes) {
       { maxBytes }
     );
   }
-  const blobs = contents.map((content) =>
-    encodeBlob(content, 'GitFastImportSession.writeBlobs')
-  );
+  const blobs = contents.map((content) => encodeBlob(content, 'GitFastImportSession.writeBlobs'));
   const totalBytes = blobs.reduce((total, bytes) => total + bytes.length, 0);
   if (totalBytes > maxBytes) {
     throw new InvalidArgumentError(

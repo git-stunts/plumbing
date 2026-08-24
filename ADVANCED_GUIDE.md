@@ -12,7 +12,7 @@ The `executeStream` method returns a `GitStream` wrapper that implements the `As
 
 ```javascript
 const stream = await git.executeStream({
-  args: ['cat-file', '-p', largeSha]
+  args: ['cat-file', '-p', largeSha],
 });
 
 for await (const chunk of stream) {
@@ -55,7 +55,7 @@ ShellRunnerFactory.register('ssh-cloud', MyCustomSSHRunner);
 
 const git = await GitPlumbing.createRepository({
   cwd: '/remote/path',
-  env: 'ssh-cloud' // Use the registered name
+  env: 'ssh-cloud', // Use the registered name
 });
 ```
 
@@ -99,7 +99,7 @@ const blobs = await git.openFastImportSession();
 const trees = await git.openMktreeSession();
 try {
   const blobOids = await blobs.writeBlobs(payloads, {
-    maxBytes: 32 * 1024 * 1024
+    maxBytes: 32 * 1024 * 1024,
   });
   await blobs.checkpoint();
   const treeOids = await trees.writeMany(treeEntryGroups);
@@ -146,12 +146,12 @@ const customPolicy = new CommandRetryPolicy({
   maxRetries: 5,
   baseDelayMs: 100,
   maxDelayMs: 2000,
-  totalTimeoutMs: 10000
+  totalTimeoutMs: 10000,
 });
 
 await git.execute({
   args: ['update-ref', 'refs/heads/main', newSha],
-  retryPolicy: customPolicy
+  retryPolicy: customPolicy,
 });
 ```
 
@@ -164,10 +164,10 @@ const traceId = `request-${Date.now()}`;
 
 await git.execute({
   args: ['rev-parse', 'HEAD'],
-  traceId
+  traceId,
 });
 
-// The traceId is passed into the CommandRunner and is available in 
+// The traceId is passed into the CommandRunner and is available in
 // GitPlumbingError if the command fails.
 ```
 

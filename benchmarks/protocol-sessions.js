@@ -21,12 +21,7 @@ const DEFAULTS = Object.freeze({
 });
 
 const REF = 'refs/benchmarks/plumbing-protocol-session';
-const SCENARIOS = Object.freeze([
-  'fast-import',
-  'mktree',
-  'cat-file-info',
-  'update-ref',
-]);
+const SCENARIOS = Object.freeze(['fast-import', 'mktree', 'cat-file-info', 'update-ref']);
 const STRATEGIES = Object.freeze(['baseline', 'optimized']);
 
 async function main() {
@@ -39,9 +34,7 @@ async function main() {
     for (let round = 0; round < totalRounds; round += 1) {
       for (let scenarioIndex = 0; scenarioIndex < SCENARIOS.length; scenarioIndex += 1) {
         const scenario = SCENARIOS[scenarioIndex];
-        const order = (round + scenarioIndex) % 2 === 0
-          ? STRATEGIES
-          : [...STRATEGIES].reverse();
+        const order = (round + scenarioIndex) % 2 === 0 ? STRATEGIES : [...STRATEGIES].reverse();
         const witnesses = new Map();
         for (const strategy of order) {
           const sample = await runSample(root, scenario, strategy, options);
@@ -117,11 +110,12 @@ async function runSample(root, scenario, strategy, options) {
   const oneShotProcesses = after.oneShotProcesses - before.oneShotProcesses;
   const sessionProcesses = after.sessionProcesses - before.sessionProcesses;
   const stdinWrites = after.stdinWrites - before.stdinWrites;
-  const apiCalls = strategy === 'baseline' || scenario === 'update-ref'
-    ? options.objects
-    : scenario === 'fast-import'
-      ? stdinWrites - 2
-      : stdinWrites;
+  const apiCalls =
+    strategy === 'baseline' || scenario === 'update-ref'
+      ? options.objects
+      : scenario === 'fast-import'
+        ? stdinWrites - 2
+        : stdinWrites;
   return Object.freeze({
     scenario,
     strategy,
@@ -145,7 +139,7 @@ async function measureFastImport(git, input, strategy, batchSize) {
       }
     } else {
       for (const group of blobWindows(input, batchSize)) {
-        oids.push(...await writer.writeBlobs(group));
+        oids.push(...(await writer.writeBlobs(group)));
       }
     }
     await writer.checkpoint();
@@ -156,12 +150,14 @@ async function measureFastImport(git, input, strategy, batchSize) {
 }
 
 async function measureMktree(git, blobOid, count, strategy, batchSize) {
-  const trees = Array.from({ length: count }, (_, index) => [{
-    mode: '100644',
-    type: 'blob',
-    oid: blobOid,
-    name: `entry-${String(index).padStart(6, '0')}`,
-  }]);
+  const trees = Array.from({ length: count }, (_, index) => [
+    {
+      mode: '100644',
+      type: 'blob',
+      oid: blobOid,
+      name: `entry-${String(index).padStart(6, '0')}`,
+    },
+  ]);
   const writer = await git.openMktreeSession();
   const oids = [];
   try {
@@ -171,7 +167,7 @@ async function measureMktree(git, blobOid, count, strategy, batchSize) {
       }
     } else {
       for (const group of windows(trees, batchSize)) {
-        oids.push(...await writer.writeMany(group));
+        oids.push(...(await writer.writeMany(group)));
       }
     }
   } finally {
@@ -190,7 +186,7 @@ async function measureInfo(git, oids, strategy, batchSize) {
       }
     } else {
       for (const group of windows(oids, batchSize)) {
-        metadata.push(...await reader.infoMany(group));
+        metadata.push(...(await reader.infoMany(group)));
       }
     }
   } finally {
@@ -234,7 +230,7 @@ async function prepareObjects(git, input, batchSize) {
   const oids = [];
   try {
     for (const group of blobWindows(input, batchSize)) {
-      oids.push(...await writer.writeBlobs(group));
+      oids.push(...(await writer.writeBlobs(group)));
     }
     await writer.checkpoint();
   } finally {
@@ -306,9 +302,8 @@ function blobWindows(values, maxItems) {
   let groupBytes = 0;
   for (let index = 0; index < values.length; index += 1) {
     const content = values[index];
-    const contentBytes = typeof content === 'string'
-      ? Buffer.byteLength(content)
-      : content.byteLength;
+    const contentBytes =
+      typeof content === 'string' ? Buffer.byteLength(content) : content.byteLength;
     const framedBytes = blobRequestByteLength(contentBytes, index + 1);
     if (framedBytes > MAX_BLOB_BATCH_PROTOCOL_BYTES) {
       throw new Error(
@@ -345,37 +340,45 @@ function digestIdentifiers(oids) {
 }
 
 function summarize(samples) {
-  return Object.fromEntries(SCENARIOS.map((scenario) => {
-    const byStrategy = Object.fromEntries(STRATEGIES.map((strategy) => {
-      const selected = samples.filter(
-        (sample) => sample.scenario === scenario && sample.strategy === strategy
+  return Object.fromEntries(
+    SCENARIOS.map((scenario) => {
+      const byStrategy = Object.fromEntries(
+        STRATEGIES.map((strategy) => {
+          const selected = samples.filter(
+            (sample) => sample.scenario === scenario && sample.strategy === strategy
+          );
+          const elapsed = selected.map(({ elapsedMs }) => elapsedMs);
+          return [
+            strategy,
+            Object.freeze({
+              medianMs: median(elapsed),
+              madMs: medianAbsoluteDeviation(elapsed),
+              gitProcesses: uniqueValue(selected.map(({ gitProcesses }) => gitProcesses)),
+              oneShotProcesses: uniqueValue(
+                selected.map(({ oneShotProcesses }) => oneShotProcesses)
+              ),
+              sessionProcesses: uniqueValue(
+                selected.map(({ sessionProcesses }) => sessionProcesses)
+              ),
+              stdinWrites: uniqueValue(selected.map(({ stdinWrites }) => stdinWrites)),
+              apiCalls: uniqueValue(selected.map(({ apiCalls }) => apiCalls)),
+            }),
+          ];
+        })
       );
-      const elapsed = selected.map(({ elapsedMs }) => elapsedMs);
-      return [strategy, Object.freeze({
-        medianMs: median(elapsed),
-        madMs: medianAbsoluteDeviation(elapsed),
-        gitProcesses: uniqueValue(selected.map(({ gitProcesses }) => gitProcesses)),
-        oneShotProcesses: uniqueValue(
-          selected.map(({ oneShotProcesses }) => oneShotProcesses)
-        ),
-        sessionProcesses: uniqueValue(selected.map(({ sessionProcesses }) => sessionProcesses)),
-        stdinWrites: uniqueValue(selected.map(({ stdinWrites }) => stdinWrites)),
-        apiCalls: uniqueValue(selected.map(({ apiCalls }) => apiCalls)),
-      })];
-    }));
-    const improvementPercent =
-      ((byStrategy.baseline.medianMs - byStrategy.optimized.medianMs) /
-        byStrategy.baseline.medianMs) * 100;
-    return [scenario, Object.freeze({ ...byStrategy, improvementPercent })];
-  }));
+      const improvementPercent =
+        ((byStrategy.baseline.medianMs - byStrategy.optimized.medianMs) /
+          byStrategy.baseline.medianMs) *
+        100;
+      return [scenario, Object.freeze({ ...byStrategy, improvementPercent })];
+    })
+  );
 }
 
 function median(values) {
   const sorted = [...values].sort((left, right) => left - right);
   const midpoint = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[midpoint - 1] + sorted[midpoint]) / 2
-    : sorted[midpoint];
+  return sorted.length % 2 === 0 ? (sorted[midpoint - 1] + sorted[midpoint]) / 2 : sorted[midpoint];
 }
 
 function medianAbsoluteDeviation(values) {

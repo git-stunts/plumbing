@@ -94,10 +94,7 @@ export default class GitUpdateRefSession {
 
   async _serialize(operation) {
     if (this._closed) {
-      throw new GitProtocolError(
-        'update-ref session is closed',
-        'GitUpdateRefSession._serialize'
-      );
+      throw new GitProtocolError('update-ref session is closed', 'GitUpdateRefSession._serialize');
     }
     const current = this._tail.then(async () => {
       try {
@@ -192,9 +189,8 @@ function normalizeExpectedOid(expectedOldOid, width) {
 }
 
 function refProcessError(result, operation, originalError) {
-  return new GitProtocolError(
-    `git update-ref exited ${result.code}: ${result.stderr}`,
-    operation,
-    { originalError, result }
-  );
+  return new GitProtocolError(`git update-ref exited ${result.code}: ${result.stderr}`, operation, {
+    originalError,
+    result,
+  });
 }

@@ -81,7 +81,7 @@ export {
   GitMktreeSession,
   GitUpdateRefSession,
   CommandRetryPolicy,
-  GitRepositoryService
+  GitRepositoryService,
 };
 
 /**
@@ -97,15 +97,18 @@ export default class GitPlumbing {
    * @param {CommandSanitizer} [options.sanitizer] - Injected sanitizer.
    * @param {ExecutionOrchestrator} [options.orchestrator] - Injected orchestrator.
    */
-  constructor({ 
+  constructor({
     runner,
     sessionRunner,
     cwd = '.',
     sanitizer = new CommandSanitizer(),
-    orchestrator = new ExecutionOrchestrator()
+    orchestrator = new ExecutionOrchestrator(),
   }) {
     if (typeof runner !== 'function') {
-      throw new InvalidArgumentError('A functional runner port is required for GitPlumbing', 'GitPlumbing.constructor');
+      throw new InvalidArgumentError(
+        'A functional runner port is required for GitPlumbing',
+        'GitPlumbing.constructor'
+      );
     }
 
     /** @private */
@@ -160,7 +163,7 @@ export default class GitPlumbing {
       runner: customRunner ?? ports.runner,
       sessionRunner:
         customSessionRunner ?? (customRunner === undefined ? ports.sessionRunner : undefined),
-      cwd
+      cwd,
     });
   }
 
@@ -182,8 +185,8 @@ export default class GitPlumbing {
     await this.checker.check();
     const isInside = await this.checker.isInsideWorkTree();
     if (!isInside) {
-      throw new GitPlumbingError('Not inside a git work tree', 'GitPlumbing.verifyInstallation', { 
-        code: 'GIT_NOT_IN_WORK_TREE'
+      throw new GitPlumbingError('Not inside a git work tree', 'GitPlumbing.verifyInstallation', {
+        code: 'GIT_NOT_IN_WORK_TREE',
       });
     }
   }
@@ -200,13 +203,13 @@ export default class GitPlumbing {
    * @returns {Promise<string>} - The trimmed stdout.
    * @throws {GitPlumbingError} - If the command fails or buffer is exceeded.
    */
-  async execute({ 
-    args, 
-    input, 
+  async execute({
+    args,
+    input,
     env,
-    maxBytes = DEFAULT_MAX_BUFFER_SIZE, 
+    maxBytes = DEFAULT_MAX_BUFFER_SIZE,
     traceId = Math.random().toString(36).substring(7),
-    retryPolicy = CommandRetryPolicy.default()
+    retryPolicy = CommandRetryPolicy.default(),
   }) {
     return this.orchestrator.orchestrate({
       execute: async () => {
@@ -217,7 +220,7 @@ export default class GitPlumbing {
       },
       retryPolicy,
       args,
-      traceId
+      traceId,
     });
   }
 
@@ -238,7 +241,7 @@ export default class GitPlumbing {
       args,
       cwd: this.cwd,
       input,
-      env
+      env,
     });
 
     try {
@@ -248,7 +251,10 @@ export default class GitPlumbing {
       if (err instanceof GitPlumbingError) {
         throw err;
       }
-      throw new GitPlumbingError(err.message, 'GitPlumbing.executeStream', { args, originalError: err });
+      throw new GitPlumbingError(err.message, 'GitPlumbing.executeStream', {
+        args,
+        originalError: err,
+      });
     }
   }
 
@@ -265,10 +271,7 @@ export default class GitPlumbing {
   async openSession({ args, env, maxStderrBytes, timeout }) {
     this.sanitizer.sanitize(args);
     if (typeof this.sessionRunner !== 'function') {
-      throw new UnsupportedCapabilityError(
-        'duplex command sessions',
-        'GitPlumbing.openSession'
-      );
+      throw new UnsupportedCapabilityError('duplex command sessions', 'GitPlumbing.openSession');
     }
     try {
       const options = SessionRunnerOptionsSchema.parse({
@@ -277,7 +280,7 @@ export default class GitPlumbing {
         cwd: this.cwd,
         env,
         maxStderrBytes,
-        timeout
+        timeout,
       });
       return new CommandSession(await this.sessionRunner(options));
     } catch (error) {
@@ -286,7 +289,7 @@ export default class GitPlumbing {
       }
       throw new GitPlumbingError(error.message, 'GitPlumbing.openSession', {
         args,
-        originalError: error
+        originalError: error,
       });
     }
   }
@@ -305,7 +308,7 @@ export default class GitPlumbing {
       args: ['cat-file', '--batch-command', ...(buffered ? ['--buffer'] : [])],
       env,
       maxStderrBytes,
-      timeout
+      timeout,
     });
     return new GitCatFileSession(session, { buffered });
   }
@@ -323,7 +326,7 @@ export default class GitPlumbing {
       args: ['mktree', '--batch', '-z'],
       env,
       maxStderrBytes,
-      timeout
+      timeout,
     });
     return new GitMktreeSession(session);
   }
@@ -341,7 +344,7 @@ export default class GitPlumbing {
       args: ['fast-import', '--quiet', '--done'],
       env,
       maxStderrBytes,
-      timeout
+      timeout,
     });
     return new GitFastImportSession(session);
   }
@@ -359,7 +362,7 @@ export default class GitPlumbing {
       args: ['update-ref', '--stdin'],
       env,
       maxStderrBytes,
-      timeout
+      timeout,
     });
     return new GitUpdateRefSession(session);
   }
@@ -375,7 +378,7 @@ export default class GitPlumbing {
   async inspectPrunableObjects({ expiresBefore } = {}) {
     const expiry = normalizePruneExpiry(expiresBefore);
     return await this.executeStream({
-      args: ['prune', '--dry-run', '--verbose', '--no-progress', `--expire=${expiry}`]
+      args: ['prune', '--dry-run', '--verbose', '--no-progress', `--expire=${expiry}`],
     });
   }
 
@@ -396,13 +399,13 @@ export default class GitPlumbing {
       return {
         stdout: stdout.trim(),
         status: result.code || 0,
-        latency: performance.now() - startTime
+        latency: performance.now() - startTime,
       };
     } catch (err) {
-      throw new GitPlumbingError(err.message, 'GitPlumbing.executeWithStatus', { 
-        args, 
+      throw new GitPlumbingError(err.message, 'GitPlumbing.executeWithStatus', {
+        args,
         originalError: err,
-        latency: performance.now() - startTime
+        latency: performance.now() - startTime,
       });
     }
   }

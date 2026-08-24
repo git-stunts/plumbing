@@ -50,11 +50,7 @@ export default class GitCatFileSession {
    * @returns {Promise<ReadonlyArray<{oid: string, type: string, size: number}>>}
    */
   async infoMany(objectNames) {
-    const batch = buildBatchCommand(
-      objectNames,
-      'info',
-      'GitCatFileSession.infoMany'
-    );
+    const batch = buildBatchCommand(objectNames, 'info', 'GitCatFileSession.infoMany');
     if (batch.objectNames.length === 0) {
       return Object.freeze([]);
     }
@@ -98,11 +94,7 @@ export default class GitCatFileSession {
    * @returns {Promise<ReadonlyArray<{oid: string, type: string, size: number, content: Uint8Array}>>}
    */
   async readMany(objectNames, { maxBytes = DEFAULT_MAX_BUFFER_SIZE } = {}) {
-    const batch = buildBatchCommand(
-      objectNames,
-      'contents',
-      'GitCatFileSession.readMany'
-    );
+    const batch = buildBatchCommand(objectNames, 'contents', 'GitCatFileSession.readMany');
     validateMaxBytes(maxBytes, 'GitCatFileSession.readMany');
     if (batch.objectNames.length === 0) {
       return Object.freeze([]);
@@ -117,11 +109,7 @@ export default class GitCatFileSession {
           objects.push(object);
           remainingBytes -= object.size;
         } catch (error) {
-          for (
-            let remaining = index + 1;
-            remaining < batch.objectNames.length;
-            remaining += 1
-          ) {
+          for (let remaining = index + 1; remaining < batch.objectNames.length; remaining += 1) {
             if (this._closed) {
               break;
             }

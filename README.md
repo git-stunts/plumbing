@@ -69,8 +69,8 @@ const commitSha = await git.createCommitFromFiles({
   parents: [GitSha.from(await git.revParse({ revision: 'HEAD' }))],
   files: [
     { path: 'manifest.json', content: JSON.stringify({ version: '1.0' }) },
-    { path: 'data.bin', content: new Uint8Array([0xDE, 0xAD, 0xBE, 0xEF]) }
-  ]
+    { path: 'data.bin', content: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) },
+  ],
 });
 ```
 
@@ -83,7 +83,7 @@ unrestricted `git prune` remains prohibited by the command sanitizer.
 ```javascript
 const plumbing = await GitPlumbing.createDefault({ cwd: './my-repo' });
 const stream = await plumbing.inspectPrunableObjects({
-  expiresBefore: '2026-07-01T00:00:00.000Z'
+  expiresBefore: '2026-07-01T00:00:00.000Z',
 });
 
 for await (const chunk of stream) {
@@ -104,7 +104,7 @@ const objects = await plumbing.openCatFileSession();
 try {
   const metadata = await objects.infoMany([firstOid, secondOid]);
   const values = await objects.readMany([firstOid, secondOid], {
-    maxBytes: 8 * 1024 * 1024
+    maxBytes: 8 * 1024 * 1024,
   });
   for (const { oid, type, content } of values) {
     consume(oid, type, content);
