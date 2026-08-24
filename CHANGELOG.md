@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Trusted Global Git Configuration**: Shell runners continue to inherit an
+  operator's `GIT_CONFIG_GLOBAL`, but per-call environment overrides can no
+  longer replace it with a caller-selected file.
+
 - **Benchmark Output Paths**: Protocol benchmark option parsing now preserves
   equals signs in values.
 

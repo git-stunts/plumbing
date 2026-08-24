@@ -28,6 +28,8 @@ By default, Git processes run in a "Clean Environment." We only whitelist variab
 - `PATH`: To locate the Git binary.
 
 Variables like `GIT_CONFIG_PARAMETERS` are explicitly blocked to prevent configuration injection.
+An inherited `GIT_CONFIG_GLOBAL` may locate the operator's configuration, but
+per-call environment overrides cannot replace it with a caller-selected file.
 
 ## 🌊 OOM & Resource Protection
 

@@ -20,7 +20,9 @@ export default class NodeShellRunner {
    */
   async open({ command, args, cwd, timeout, maxStderrBytes, env: envOverrides }) {
     const baseEnv = EnvironmentPolicy.filter(globalThis.process?.env || {});
-    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
+    const env = envOverrides
+      ? { ...baseEnv, ...EnvironmentPolicy.filterOverrides(envOverrides) }
+      : baseEnv;
     let child;
     try {
       child = spawn(command, args, { cwd, env });
@@ -55,7 +57,7 @@ export default class NodeShellRunner {
           signal,
           stderr: await stderrPromise,
           terminated,
-          timedOut
+          timedOut,
         });
       };
       child.once('error', (error) => void settle(1, null, error));
@@ -117,7 +119,7 @@ export default class NodeShellRunner {
         if (!child.killed) {
           child.kill('SIGTERM');
         }
-      }
+      },
     });
   }
 
@@ -128,7 +130,9 @@ export default class NodeShellRunner {
   async run({ command, args, cwd, input, timeout, env: envOverrides }) {
     // Create a clean environment using Domain Policy
     const baseEnv = EnvironmentPolicy.filter(globalThis.process?.env || {});
-    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
+    const env = envOverrides
+      ? { ...baseEnv, ...EnvironmentPolicy.filterOverrides(envOverrides) }
+      : baseEnv;
 
     const child = spawn(command, args, { cwd, env });
 
@@ -157,19 +161,23 @@ export default class NodeShellRunner {
       }
 
       child.on('exit', (code) => {
-        if (timeoutId) {clearTimeout(timeoutId);}
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         resolve({ code: code ?? 1, stderr, timedOut: false });
       });
 
       child.on('error', (err) => {
-        if (timeoutId) {clearTimeout(timeoutId);}
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         resolve({ code: 1, stderr: `${stderr}\n${err.message}`, timedOut: false, error: err });
       });
     });
 
     return RunnerResultSchema.parse({
       stdoutStream: child.stdout,
-      exitPromise
+      exitPromise,
     });
   }
 }

@@ -41,7 +41,8 @@ export default class EnvironmentPolicy {
     // Configuration discovery: where git looks for the operator's own config.
     // HOME finds ~/.gitconfig, XDG_CONFIG_HOME finds ~/.config/git/config,
     // GIT_CONFIG_GLOBAL names the file outright, and USERPROFILE is how a home
-    // directory is resolved on Windows.
+    // directory is resolved on Windows. Runners accept GIT_CONFIG_GLOBAL only
+    // from their inherited environment, never from per-call overrides.
     'HOME',
     'XDG_CONFIG_HOME',
     'GIT_CONFIG_GLOBAL',
@@ -50,18 +51,14 @@ export default class EnvironmentPolicy {
     'LANG',
     'LC_ALL',
     'LC_CTYPE',
-    'LC_MESSAGES'
+    'LC_MESSAGES',
   ];
 
   /**
    * List of environment variables that are explicitly blocked.
    * @private
    */
-  static _BLOCKED_KEYS = [
-    'GIT_CONFIG_PARAMETERS',
-    'GIT_EXEC_PATH',
-    'GIT_TEMPLATE_DIR'
-  ];
+  static _BLOCKED_KEYS = ['GIT_CONFIG_PARAMETERS', 'GIT_EXEC_PATH', 'GIT_TEMPLATE_DIR'];
 
   /**
    * Filters the provided environment object based on the whitelist and blacklist.
@@ -70,7 +67,7 @@ export default class EnvironmentPolicy {
    */
   static filter(env = {}) {
     const sanitized = {};
-    
+
     for (const key of EnvironmentPolicy._ALLOWED_KEYS) {
       // Ensure we don't allow a key if it's also in the blocked list (redundancy)
       if (EnvironmentPolicy._BLOCKED_KEYS.includes(key)) {
@@ -82,6 +79,20 @@ export default class EnvironmentPolicy {
       }
     }
 
+    return sanitized;
+  }
+
+  /**
+   * Filters caller-provided per-command environment overrides.
+   *
+   * The runner may inherit GIT_CONFIG_GLOBAL from its trusted process
+   * environment, but a caller must not replace it with an arbitrary file.
+   * @param {Object} env - Caller-provided environment overrides.
+   * @returns {Object} Sanitized per-command overrides.
+   */
+  static filterOverrides(env = {}) {
+    const sanitized = EnvironmentPolicy.filter(env);
+    delete sanitized.GIT_CONFIG_GLOBAL;
     return sanitized;
   }
 }
