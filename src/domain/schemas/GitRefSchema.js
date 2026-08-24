@@ -11,7 +11,11 @@ export const GitRefSchema = z.string()
   .refine(val => !val.includes('..'), 'Cannot contain double dots')
   .refine(val => !val.includes('/.'), 'Components cannot start with a dot')
   .refine(val => !val.includes('//'), 'Cannot contain consecutive slashes')
-  .refine(val => !val.endsWith('.lock'), 'Cannot end with .lock')
+  .refine(val => !val.startsWith('/') && !val.endsWith('/'), 'Cannot start or end with a slash')
+  .refine(
+    val => !val.split('/').some(component => component.endsWith('.lock')),
+    'Components cannot end with .lock'
+  )
   .refine(val => {
     // Prohibited characters: space, ~, ^, :, ?, *, [, \
     const prohibited = [' ', '~', '^', ':', '?', '*', '[', '\\'];

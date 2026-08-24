@@ -543,6 +543,10 @@ describe('long-lived Git protocol sessions', () => {
       newOid: firstOid,
       expectedOldOid: 'a'.repeat(64),
     })).rejects.toBeInstanceOf(InvalidArgumentError);
+    await expect(writer.update({
+      ref: 'refs/plumbing/trailing/',
+      newOid: firstOid,
+    })).rejects.toBeInstanceOf(InvalidArgumentError);
     expect(scripted.writes).toHaveLength(0);
     await expect(writer.update({
       ref: 'refs/plumbing/test',

@@ -14,6 +14,11 @@ const INVALID_REF_BACKSLASH = 'refs/heads\\main';
 const INVALID_REF_CONTROL_CHARS = 'refs/heads/main\x00';
 const INVALID_REF_SPACE = 'refs/heads/main branch';
 const INVALID_REF_CONSECUTIVE_SLASHES = 'refs//heads/main';
+const INVALID_REF_PATHS = [
+  '/refs/heads/leading',
+  'refs/heads/trailing/',
+  'refs/heads/bad.lock/child',
+];
 
 describe('GitRef', () => {
   describe('constructor', () => {
@@ -65,6 +70,10 @@ describe('GitRef', () => {
 
     it('throws error for reference with consecutive slashes', () => {
       expect(() => new GitRef(INVALID_REF_CONSECUTIVE_SLASHES)).toThrow();
+    });
+
+    it.each(INVALID_REF_PATHS)('throws error for Git-incompatible path %s', (ref) => {
+      expect(() => new GitRef(ref)).toThrow(ValidationError);
     });
 
     it("allows '@' if it doesn't form reflog sequence", () => {

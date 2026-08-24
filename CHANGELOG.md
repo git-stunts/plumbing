@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Exact Git Reference Validation**: Reference values now reject leading or
+  trailing slashes and `.lock` path components before reaching Git protocol
+  state.
+
 - **User Git Configuration Reaches Git**: `EnvironmentPolicy` filtered out every
   variable git uses to locate the operator's configuration, so the spawned
   process could not read `~/.gitconfig`. Git fell back to inventing an identity
