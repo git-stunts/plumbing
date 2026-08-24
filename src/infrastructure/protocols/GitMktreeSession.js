@@ -67,18 +67,18 @@ export default class GitMktreeSession {
    * @returns {Promise<ReadonlyArray<string>>}
    */
   async writeMany(trees) {
-    validateTrees(trees);
-    if (trees.length === 0) {
+    const batch = validateTrees(trees);
+    if (batch.length === 0) {
       return Object.freeze([]);
     }
     return await this._serialize(async () => {
       let protocolStarted = false;
       try {
-        const payload = await prepareTreeBatch(trees);
+        const payload = await prepareTreeBatch(batch);
         protocolStarted = true;
         await this._session.write(payload);
         const oids = [];
-        for (let index = 0; index < trees.length; index += 1) {
+        for (let index = 0; index < batch.length; index += 1) {
           oids.push(await this._readOid('GitMktreeSession.writeMany'));
         }
         return Object.freeze(oids);
@@ -212,13 +212,15 @@ function validateTrees(trees) {
   if (!Array.isArray(trees)) {
     throw new InvalidArgumentError('trees must be an array', 'GitMktreeSession.writeMany');
   }
-  if (trees.length > MAX_BATCH_TREES) {
+  const snapshot = Object.freeze([...trees]);
+  if (snapshot.length > MAX_BATCH_TREES) {
     throw new InvalidArgumentError(
       `A mktree batch may contain at most ${MAX_BATCH_TREES} trees`,
       'GitMktreeSession.writeMany',
-      { count: trees.length, maxTrees: MAX_BATCH_TREES }
+      { count: snapshot.length, maxTrees: MAX_BATCH_TREES }
     );
   }
+  return snapshot;
 }
 
 async function prepareTreeBatch(trees) {

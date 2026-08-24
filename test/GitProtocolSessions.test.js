@@ -309,6 +309,23 @@ describe('long-lived Git protocol sessions', () => {
     await writer.close();
   });
 
+  it('snapshots the outer tree batch before the operation is queued', async () => {
+    const firstTree = 'a'.repeat(firstOid.length);
+    const secondTree = 'b'.repeat(firstOid.length);
+    const scripted = gatedSession(`${firstTree}\n${secondTree}\n`, 1);
+    const writer = new GitMktreeSession(scripted.session);
+    const trees = [[]];
+
+    try {
+      const writing = writer.writeMany(trees);
+      trees.push([]);
+
+      await expect(writing).resolves.toEqual([firstTree]);
+    } finally {
+      await writer.close();
+    }
+  });
+
   it('poisons a tree batch after a malformed ordered response', async () => {
     const firstTree = 'a'.repeat(firstOid.length);
     const scripted = gatedSession(`${firstTree}\nnot-an-oid\n`, 1);
