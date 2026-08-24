@@ -62,10 +62,16 @@ export default class EnvironmentPolicy {
   static _BLOCKED_KEYS = ['GIT_CONFIG_PARAMETERS', 'GIT_EXEC_PATH', 'GIT_TEMPLATE_DIR'];
 
   /**
-   * Configuration-discovery paths trusted only when inherited by a runner.
+   * Values trusted only when inherited by a runner.
    * @private
    */
-  static _CONFIG_DISCOVERY_KEYS = ['HOME', 'XDG_CONFIG_HOME', 'GIT_CONFIG_GLOBAL', 'USERPROFILE'];
+  static _INHERITED_ONLY_KEYS = [
+    'PATH',
+    'HOME',
+    'XDG_CONFIG_HOME',
+    'GIT_CONFIG_GLOBAL',
+    'USERPROFILE',
+  ];
 
   /**
    * Filters the provided environment object based on the whitelist and blacklist.
@@ -92,14 +98,14 @@ export default class EnvironmentPolicy {
   /**
    * Filters caller-provided per-command environment overrides.
    *
-   * A runner may inherit configuration-discovery paths from its trusted
-   * process environment, but a caller must not redirect them.
+   * A runner may inherit executable and configuration-discovery paths from its
+   * trusted process environment, but a caller must not redirect them.
    * @param {Object} env - Caller-provided environment overrides.
    * @returns {Object} Sanitized per-command overrides.
    */
   static filterOverrides(env = {}) {
     const sanitized = EnvironmentPolicy.filter(env);
-    for (const key of EnvironmentPolicy._CONFIG_DISCOVERY_KEYS) {
+    for (const key of EnvironmentPolicy._INHERITED_ONLY_KEYS) {
       delete sanitized[key];
     }
     return sanitized;

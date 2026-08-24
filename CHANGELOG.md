@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Trusted Git Executable**: Shell runners inherit the operator's `PATH`, but
+  per-call environment overrides can no longer select an arbitrary executable
+  named `git`.
+
 - **Trusted Git Configuration Discovery**: Shell runners continue to inherit an
   operator's `HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, and `USERPROFILE`,
   but per-call environment overrides can no longer redirect those paths to

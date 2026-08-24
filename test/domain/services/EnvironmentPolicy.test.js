@@ -97,6 +97,7 @@ describe('EnvironmentPolicy', () => {
 
   it('keeps configuration-discovery paths out of caller overrides', () => {
     const filtered = EnvironmentPolicy.filterOverrides({
+      PATH: '/tmp/caller-bin',
       HOME: '/tmp/caller-home',
       XDG_CONFIG_HOME: '/tmp/caller-xdg',
       GIT_CONFIG_GLOBAL: '/tmp/caller.gitconfig',
