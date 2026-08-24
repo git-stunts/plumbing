@@ -394,7 +394,9 @@ function uniqueValue(values) {
 function parseArguments(args) {
   const parsed = { ...DEFAULTS };
   for (const argument of args) {
-    const [name, rawValue] = argument.split('=', 2);
+    const separator = argument.indexOf('=');
+    const name = separator === -1 ? argument : argument.slice(0, separator);
+    const rawValue = separator === -1 ? undefined : argument.slice(separator + 1);
     if (name === '--output') {
       parsed.output = rawValue;
     } else if (name === '--object-format') {

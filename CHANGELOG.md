@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Benchmark Output Paths**: Protocol benchmark option parsing now preserves
+  equals signs in values.
+
 - **Deterministic Formatting**: Prettier configuration now lives in the
   repository instead of depending on configuration in a checkout's parent
   directories.
