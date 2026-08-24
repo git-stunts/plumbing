@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Bounded Protocol Batches**: Added ordered `infoMany()`, `writeBlobs()`, and
+  `writeMany()` operations for persistent cat-file, fast-import, and mktree
+  sessions.
+- **Persistent Ref Transactions**: Added `openUpdateRefSession()` for repeated,
+  explicit update-ref transactions through one Git process, with unconditional,
+  create-only, and compare-and-swap modes.
+- **Reproducible Protocol Benchmark**: Added a Docker-only SHA-256 benchmark for
+  latency, process topology, stdin writes, and exact object identity.
+
+### Changed
+
+- **Single-Write Batch Framing**: Bounded object and tree groups now enter Git
+  through one backpressure-aware write after complete preflight validation.
+
 ### Fixed
+
+- **Trusted Git Executable**: Shell runners inherit the operator's `PATH`, but
+  per-call environment overrides can no longer select an arbitrary executable
+  named `git`.
+
+- **Trusted Git Configuration Discovery**: Shell runners continue to inherit an
+  operator's `HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, and `USERPROFILE`,
+  but per-call environment overrides can no longer redirect those paths to
+  caller-selected configuration.
+
+- **Benchmark Output Paths**: Protocol benchmark option parsing now preserves
+  equals signs in values.
+
+- **Deterministic Formatting**: Prettier configuration now lives in the
+  repository instead of depending on configuration in a checkout's parent
+  directories.
+
+- **Strict Cat-File Transcripts**: Metadata responses with non-protocol leading
+  or trailing whitespace now poison the session instead of being normalized.
+
+- **Exact Git Reference Validation**: Reference values now reject leading or
+  trailing slashes and `.lock` path components before reaching Git protocol
+  state.
 
 - **User Git Configuration Reaches Git**: `EnvironmentPolicy` filtered out every
   variable git uses to locate the operator's configuration, so the spawned
@@ -15,11 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the system account and hostname, and commits were attributed to addresses
   such as `user@laptop.local` that exist nowhere and verify against nothing,
   while the operator's configured identity sat unread on disk. `HOME`,
-  `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL` and `USERPROFILE` now pass through.
+  `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL` and `USERPROFILE` now pass through from
+  the shell runner's inherited environment.
 
-  Locating configuration is not the same as injecting it: `GIT_CONFIG_PARAMETERS`,
-  `GIT_EXEC_PATH` and `GIT_TEMPLATE_DIR` remain blocked, so a caller still cannot
-  push settings into the process directly.
+  Locating configuration is not the same as injecting it: per-call overrides
+  for those discovery paths, `GIT_CONFIG_PARAMETERS`, `GIT_EXEC_PATH` and
+  `GIT_TEMPLATE_DIR` remain blocked, so a caller still cannot push settings into
+  the process directly.
 
   Callers that relied on git being unable to see user configuration — expecting a
   fixed synthetic author, or an environment where `core.*` settings could not
@@ -55,58 +96,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.0.3] - 2026-05-06
 
 ### Fixed
+
 - **CI/CD Reliability**: Restored environment-based OIDC claim to match npm Trusted Publisher configuration.
 
 ## [3.0.2] - 2026-05-06
 
 ### Fixed
+
 - **CI/CD Reliability**: Further modernization of the publishing workflow to align with npm trusted publishing requirements (Node 24, simplified OIDC trust).
 
 ## [3.0.1] - 2026-05-06
 
 ### Fixed
+
 - **CI Publishing**: Repaired the automated publishing workflow to use OIDC trusted publishing and ensure the publish job depends strictly on successful pre-flight tests.
 
 ## [3.0.0] - 2026-05-06
 
 ### Added
+
 - **Asynchronous Initialization**: Refactored `GitPlumbing` and `GitRepositoryService` factories to be `async`, ensuring non-blocking environment validation and path resolution.
 - **Async CWD Validation**: `ShellRunnerFactory.validateCwd` now uses asynchronous filesystem operations (`stat` vs `statSync`).
 - **Industrial Documentation**: Rewrote `README.md` and added `GUIDE.md` and `ADVANCED_GUIDE.md` to provide comprehensive pedagogical and technical coverage.
 
 ### Changed
+
 - **Breaking: Constructor Signature**: Removed `fsAdapter` and synchronous path resolution from the `GitPlumbing` constructor. Path resolution must now be handled via `createDefault` or `createRepository`.
 - **Breaking: Factory Return Types**: `GitPlumbing.createDefault`, `GitPlumbing.createRepository`, and `ShellRunnerFactory.validateCwd` now return `Promise` instances.
 
 ### Removed
+
 - **Synchronous Path Resolution**: Eliminated `fs.existsSync` and `fs.statSync` from the core initialization path to ensure event-loop friendliness across all runtimes.
-
-## [Unreleased] - 2026-01-08
-
-### Added
-- **Shared Docker Guard**: Added `@git-stunts/docker-guard` with `isDockerEnvironment`/`ensureDocker`, exported banner text, and injectable logger/exit hooks so every repo can reuse the same safety net.
-### Changed
-- **Plumbing Guard Wiring**: `@git-stunts/plumbing` now imports the shared guard via `test/support/ensure-docker.js`, `vitest.config.js`, and `test/deno_entry.js`, removing the in-repo Minecraft `src/infrastructure/DockerGuard.js`.
 
 ## [2.8.0] - 2026-01-07
 
 ### Added
+
 - **DockerGuard**: Introduced a critical safety service (`src/infrastructure/DockerGuard.js`) that prevents execution on the host machine to protect against unintended system modifications.
 - **Dockerized Workflow**: Added `Dockerfile.node`, `Dockerfile.bun`, `Dockerfile.deno`, and `docker-compose.yml` to standardize isolated testing environments.
+- **Shared Docker Guard**: Added `@git-stunts/docker-guard` with
+  `isDockerEnvironment`/`ensureDocker`, exported banner text, and injectable
+  logger/exit hooks so every repo can reuse the same safety net.
 
 ### Changed
+
 - **Command Whitelist Expansion**: Added `log` to the `CommandSanitizer` allowed list to support high-performance graph traversals.
 - **Strict Host Enforcement**: Updated `package.json` with a `pretest` script that enforces the `GIT_STUNTS_DOCKER` environment variable.
+- **Plumbing Guard Wiring**: `@git-stunts/plumbing` now imports the shared guard
+  via `test/support/ensure-docker.js`, `vitest.config.js`, and
+  `test/deno_entry.js`, removing the in-repo Minecraft
+  `src/infrastructure/DockerGuard.js`.
 
 ## [2.7.0] - 2026-01-07
 
 ### Added
+
 - **GitRepositoryService.save()**: Introduced a polymorphic persistence method that automatically delegates to the appropriate low-level operation based on the entity type (Blob, Tree, or Commit).
 - **Commit Lifecycle Guide**: Created `docs/COMMIT_LIFECYCLE.md`, a step-by-step tutorial covering manual graph construction and persistence.
 - **Root Barrel Files**: Added `sha.js`, `ref.js`, `mode.js`, `signature.js`, and `errors.js` at the package root to provide a clean and stable public API.
 - **Security Documentation**: Created `SECURITY.md` to document the library's security model and process isolation rationale.
 
 ### Changed
+
 - **Documentation Overhaul**: Updated `README.md` with enhanced security details, design principles, and prominent links to the new lifecycle guide.
 - **Process Isolation**: Hardened shell runners with strict environment variable whitelisting and support for per-call overrides.
 - **GitStream Resource Management**: Made `destroy()` idempotent and optimized `collect()` to reuse a module-level `TextEncoder`.
@@ -115,6 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Refined Exports**: Updated `package.json` to use root barrel files for all subpath exports, ensuring a consistent public API surface.
 
 ### Fixed
+
 - **Node.js Shell Stability**: Resolved a critical bug in `NodeShellRunner` where processes were killed immediately if no timeout was specified.
 - **Backoff Logic**: Fixed an off-by-one error in `ExecutionOrchestrator` that caused incorrect delay calculations during retries.
 - **Type Safety**: Added type validation to `CommandSanitizer` to prevent `TypeError` when receiving non-string arguments.
@@ -126,30 +178,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.6.0] - 2026-01-07
 
 ### Added
+
 - **GitPersistenceService**: New domain service for persisting Git entities (Blobs, Trees, Commits) to the object database using plumbing commands.
 - **GitPlumbing.commit()**: High-level orchestration method that handles the full sequence from content creation to reference update in a single atomic-like operation.
 - **Environment Overrides**: `GitPlumbing.execute()` now supports per-call environment variable overrides, enabling precise control over identity (`GIT_AUTHOR_*`) during execution.
 
 ### Changed
+
 - **GitRepositoryService Enhancement**: Added `writeBlob`, `writeTree`, and `writeCommit` methods, delegating to the persistence layer.
 - **Runner Schema Evolution**: Updated `RunnerOptionsSchema` to include an optional `env` record for cross-runtime environment injection.
 
 ## [2.5.0] - 2026-01-07
 
 ### Added
+
 - **GitCommandBuilder Fluent API**: Added static factory methods for all whitelisted Git commands (e.g., `.hashObject()`, `.catFile()`, `.writeTree()`) and fluent flag methods (e.g., `.stdin()`, `.write()`, `.pretty()`) for a more expressive command building experience.
 
 ### Changed
+
 - **GitPlumbing DI Support**: Updated the constructor to accept optional `sanitizer` and `orchestrator` instances, enabling full Dependency Injection for easier testing and customization of core logic.
 
 ## [2.4.0] - 2026-01-07
 
 ### Added
+
 - **GitErrorClassifier**: Extracted error categorization logic from the orchestrator into a dedicated domain service. Uses regex and exit codes (e.g., 128) to identify lock contention and state issues.
 - **ProhibitedFlagError**: New specialized error thrown when restricted Git flags (like `--work-tree`) are detected, providing remediation guidance and documentation links.
 - **Dynamic Command Registration**: Added `CommandSanitizer.allow(commandName)` to permit runtime extension of the allowed plumbing command list.
 
 ### Changed
+
 - **Dependency Injection (DI)**: Refactored `CommandSanitizer` and `ExecutionOrchestrator` into injectable class instances, improving testability and modularity of the `GitPlumbing` core.
 - **Sanitizer Memoization**: Implemented an internal LRU-ish cache in `CommandSanitizer` to skip re-validation of identical repetitive commands, improving performance for high-frequency operations.
 - **Enhanced Deno Shim**: Updated the test shim to include `beforeEach`, `afterEach`, and other lifecycle hooks for full parity with Vitest.
@@ -157,16 +215,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.3.0] - 2026-01-07
 
 ### Changed
+
 - **Validation Unification**: Completed the migration from `ajv` to `zod` for the entire library, reducing bundle size and unifying the type-safety engine.
 - **Security Hardening**: Expanded the `EnvironmentPolicy` whitelist to include `GIT_AUTHOR_TZ`, `GIT_COMMITTER_TZ`, and localization variables (`LANG`, `LC_ALL`, etc.) to ensure identity and encoding consistency.
 - **Universal Testing**: Updated the multi-runtime test suite to ensure 100% test parity across Node.js, Bun, and Deno, specifically adding missing builder and environment tests.
 
 ### Added
+
 - **EnvironmentPolicy**: Extracted environment variable whitelisting into a dedicated domain service used by all shell runners.
 
 ## [2.2.0] - 2026-01-07
 
 ### Added
+
 - **ExecutionOrchestrator**: Extracted command execution lifecycle (retry, backoff, lock detection) into a dedicated domain service to improve SRP compliance.
 - **Binary Stream Support**: Refactored `GitStream.collect()` to support raw `Uint8Array` accumulation, preventing corruption of non-UTF8 binary data (e.g., blobs, compressed trees).
 - **GitRepositoryLockedError**: Introduced a specialized error for repository lock contention with remediation guidance.
@@ -177,6 +238,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Workflow Recipes**: Created `docs/RECIPES.md` providing step-by-step guides for low-level Git workflows (e.g., 'Commit from Scratch').
 
 ### Changed
+
 - **Memory Optimization**: Enhanced `GitStream.collect()` to use chunk-based accumulation with `Uint8Array.set()`, reducing redundant string allocations during collection.
 - **Runtime Performance**: Optimized `ByteMeasurer` to use `Buffer.byteLength()` in Node.js and Bun, significantly improving performance for large string measurements.
 - **Development Tooling**: Upgraded `vitest` to version 3.0.0 for improved testing capabilities and performance.
@@ -184,6 +246,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.0] - 2026-01-07
 
 ### Added
+
 - **GitRepositoryService**: Extracted high-level repository operations (`revParse`, `updateRef`, `deleteRef`) into a dedicated domain service.
 - **Resilience Layer**: Implemented exponential backoff retry logic for Git lock contention (`index.lock`) in `GitPlumbing.execute`.
 - **Telemetric Trace IDs**: Added automatic and manual `traceId` correlation across command execution for production traceability.
@@ -192,43 +255,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Resource Lifecycle Management**: Enhanced `GitStream` with `FinalizationRegistry` and `destroy()` for deterministic cleanup of shell processes.
 
 ### Changed
+
 - **Entity Unification**: Refactored `GitTreeEntry` to use object-based constructors, standardizing the entire domain entity API.
 - **Hardened Sanitizer**: Strengthened `CommandSanitizer` to block configuration overrides (`-c`, `--config`) globally and expanded the plumbing command whitelist.
 - **Enhanced Verification**: `GitPlumbing.verifyInstallation` now validates both the Git binary and the repository integrity of the current working directory.
 
 ### Fixed
+
 - **Deno Resource Leaks**: Resolved process leaks in Deno by ensuring proper stream consumption across all test cases.
 - **Node.js Stream Performance**: Optimized async iteration in `GitStream` using native protocols.
 
 ## [2.0.0] - 2026-01-07
 
 ### Added
+
 - **Unified Streaming Architecture**: Refactored all shell runners (Node, Bun, Deno) to use a single "Streaming Only" pattern, simplifying the adapter layer and port interface.
 - **Exhaustive Zod Schemas**: Centralized validation in `src/domain/schemas` using Zod for all Entities and Value Objects.
 - **Safety Buffering**: Added `GitStream.collect({ maxBytes })` with default 10MB limit to prevent OOM during large command execution.
 - **Runtime Factory**: Added `GitPlumbing.createDefault()` for zero-config instantiation in Node, Bun, and Deno.
 
 ### Changed
+
 - **Strict Hexagonal Architecture**: Enforced strict dependency inversion by passing the runner port to domain services.
 - **1 Class per File**: Reorganized the codebase to strictly adhere to the "one class per file" mandate.
 - **Magic Number Elimination**: Replaced all hardcoded literals (timeouts, buffer sizes, SHA constants) with named exports in the ports layer.
 - **Bound Context**: Ensured `ShellRunnerFactory` returns bound methods to prevent `this` context loss in production.
 
 ### Fixed
+
 - **Performance**: Optimized `GitStream` for Node.js by using native `Symbol.asyncIterator` instead of high-frequency listener attachments.
 - **Validation**: Fixed incomplete Git reference validation by implementing the full `git-check-ref-format` specification via Zod.
 
 ## [1.1.0] - 2026-01-07
 
 ### Added
+
 - **Stream Completion Tracking**: Introduced `exitPromise` to `CommandRunnerPort` and `GitStream.finished` to track command success/failure after stream consumption.
 - **Resource Limits**: Implemented `MAX_ARGS`, `MAX_ARG_LENGTH`, and `MAX_TOTAL_LENGTH` in `CommandSanitizer` to prevent resource exhaustion attacks.
 
 ### Changed
+
 - **Security Hardening**: Restricted `CommandSanitizer` to Git-only commands (removed `sh`, `cat`) and added 12+ prohibited Git flags (e.g., `--exec-path`, `--config`, `--work-tree`).
 - **Universal Timeout**: Applied execution timeouts to streaming mode across all adapters (Node, Bun, Deno).
 
 ### Fixed
+
 - **Test Integrity**: Corrected critical race conditions in the test suite by ensuring all async Git operations are properly awaited.
 - **Streaming Reliability**: Fixed Deno streaming adapter to capture stderr without conflicting with stdout consumption.
 

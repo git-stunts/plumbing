@@ -15,8 +15,9 @@
  * ordinary git behaviour: without it git cannot read ~/.gitconfig, invents an
  * identity from the system account and hostname, and writes commits attributed
  * to an address that exists nowhere and verifies against nothing. The second
- * stays blocked, because GIT_CONFIG_PARAMETERS and friends push settings into
- * the process directly rather than pointing at a file the operator owns.
+ * stays blocked: configuration-discovery paths are accepted only from the
+ * runner's inherited environment, while GIT_CONFIG_PARAMETERS and friends are
+ * never accepted.
  */
 export default class EnvironmentPolicy {
   /**
@@ -41,7 +42,8 @@ export default class EnvironmentPolicy {
     // Configuration discovery: where git looks for the operator's own config.
     // HOME finds ~/.gitconfig, XDG_CONFIG_HOME finds ~/.config/git/config,
     // GIT_CONFIG_GLOBAL names the file outright, and USERPROFILE is how a home
-    // directory is resolved on Windows.
+    // directory is resolved on Windows. Runners accept these paths only from
+    // their inherited environment, never from per-call overrides.
     'HOME',
     'XDG_CONFIG_HOME',
     'GIT_CONFIG_GLOBAL',
@@ -50,17 +52,25 @@ export default class EnvironmentPolicy {
     'LANG',
     'LC_ALL',
     'LC_CTYPE',
-    'LC_MESSAGES'
+    'LC_MESSAGES',
   ];
 
   /**
    * List of environment variables that are explicitly blocked.
    * @private
    */
-  static _BLOCKED_KEYS = [
-    'GIT_CONFIG_PARAMETERS',
-    'GIT_EXEC_PATH',
-    'GIT_TEMPLATE_DIR'
+  static _BLOCKED_KEYS = ['GIT_CONFIG_PARAMETERS', 'GIT_EXEC_PATH', 'GIT_TEMPLATE_DIR'];
+
+  /**
+   * Values trusted only when inherited by a runner.
+   * @private
+   */
+  static _INHERITED_ONLY_KEYS = [
+    'PATH',
+    'HOME',
+    'XDG_CONFIG_HOME',
+    'GIT_CONFIG_GLOBAL',
+    'USERPROFILE',
   ];
 
   /**
@@ -70,7 +80,7 @@ export default class EnvironmentPolicy {
    */
   static filter(env = {}) {
     const sanitized = {};
-    
+
     for (const key of EnvironmentPolicy._ALLOWED_KEYS) {
       // Ensure we don't allow a key if it's also in the blocked list (redundancy)
       if (EnvironmentPolicy._BLOCKED_KEYS.includes(key)) {
@@ -82,6 +92,22 @@ export default class EnvironmentPolicy {
       }
     }
 
+    return sanitized;
+  }
+
+  /**
+   * Filters caller-provided per-command environment overrides.
+   *
+   * A runner may inherit executable and configuration-discovery paths from its
+   * trusted process environment, but a caller must not redirect them.
+   * @param {Object} env - Caller-provided environment overrides.
+   * @returns {Object} Sanitized per-command overrides.
+   */
+  static filterOverrides(env = {}) {
+    const sanitized = EnvironmentPolicy.filter(env);
+    for (const key of EnvironmentPolicy._INHERITED_ONLY_KEYS) {
+      delete sanitized[key];
+    }
     return sanitized;
   }
 }

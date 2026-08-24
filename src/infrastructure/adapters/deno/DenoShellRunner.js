@@ -21,7 +21,9 @@ export default class DenoShellRunner {
    */
   async open({ command, args, cwd, timeout, maxStderrBytes, env: envOverrides }) {
     const baseEnv = EnvironmentPolicy.filter(Deno.env.toObject());
-    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
+    const env = envOverrides
+      ? { ...baseEnv, ...EnvironmentPolicy.filterOverrides(envOverrides) }
+      : baseEnv;
     let child;
     try {
       child = new Deno.Command(command, {
@@ -30,7 +32,7 @@ export default class DenoShellRunner {
         env,
         stdin: 'piped',
         stdout: 'piped',
-        stderr: 'piped'
+        stderr: 'piped',
       }).spawn();
     } catch (error) {
       return new FailedSessionRunnerResult(error);
@@ -75,7 +77,7 @@ export default class DenoShellRunner {
         signal: status.signal,
         stderr: await stderrPromise,
         terminated,
-        timedOut
+        timedOut,
       };
     })();
 
@@ -104,7 +106,7 @@ export default class DenoShellRunner {
         } catch {
           // Termination is idempotent.
         }
-      }
+      },
     });
   }
 
@@ -115,13 +117,15 @@ export default class DenoShellRunner {
   async run({ command, args, cwd, input, timeout, env: envOverrides }) {
     // Create a clean environment using Domain Policy
     const baseEnv = EnvironmentPolicy.filter(Deno.env.toObject());
-    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
+    const env = envOverrides
+      ? { ...baseEnv, ...EnvironmentPolicy.filterOverrides(envOverrides) }
+      : baseEnv;
 
     const cmd = new Deno.Command(command, {
       args,
       cwd,
       env,
-      stdin: 'piped', 
+      stdin: 'piped',
       stdout: 'piped',
       stderr: 'piped',
     });
@@ -151,7 +155,11 @@ export default class DenoShellRunner {
       const timeoutPromise = new Promise((resolve) => {
         if (timeout) {
           timeoutId = setTimeout(() => {
-            try { child.kill("SIGTERM"); } catch { /* ignore */ }
+            try {
+              child.kill('SIGTERM');
+            } catch {
+              /* ignore */
+            }
             resolve({ code: 1, stderr: 'Command timed out', timedOut: true });
           }, timeout);
         }
@@ -171,7 +179,7 @@ export default class DenoShellRunner {
 
     return RunnerResultSchema.parse({
       stdoutStream: child.stdout,
-      exitPromise
+      exitPromise,
     });
   }
 }

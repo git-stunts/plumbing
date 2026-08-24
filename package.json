@@ -24,6 +24,7 @@
   "scripts": {
     "test": "./scripts/run-multi-runtime-tests.sh",
     "test:local": "vitest run --globals",
+    "benchmark:protocol-sessions": "node benchmarks/protocol-sessions.js",
     "prepare": "test -d .git || true",
     "lint": "eslint .",
     "format": "prettier --write .",

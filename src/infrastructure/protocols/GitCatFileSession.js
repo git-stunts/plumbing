@@ -39,9 +39,34 @@ export default class GitCatFileSession {
   async info(objectName) {
     validateObjectName(objectName, 'GitCatFileSession.info');
     return await this._serialize(async () => {
-      await this._session.write(`info ${objectName}\n`);
-      await this._flush();
+      await this._send(`info ${objectName}\n`);
       return this._parseInfo(DECODER.decode(await this._reader.readLine()), objectName);
+    });
+  }
+
+  /**
+   * Pipelines a bounded group of metadata reads.
+   * @param {string[]} objectNames
+   * @returns {Promise<ReadonlyArray<{oid: string, type: string, size: number}>>}
+   */
+  async infoMany(objectNames) {
+    const batch = buildBatchCommand(objectNames, 'info', 'GitCatFileSession.infoMany');
+    if (batch.objectNames.length === 0) {
+      return Object.freeze([]);
+    }
+    return await this._serialize(async () => {
+      await this._send(batch.command);
+      const objects = [];
+      for (let index = 0; index < batch.objectNames.length; index += 1) {
+        try {
+          const line = DECODER.decode(await this._reader.readLine());
+          objects.push(this._parseInfo(line, batch.objectNames[index]));
+        } catch (error) {
+          await this._drainInfoBatch(batch.objectNames, index + 1);
+          throw error;
+        }
+      }
+      return Object.freeze(objects);
     });
   }
 
@@ -56,8 +81,7 @@ export default class GitCatFileSession {
     validateObjectName(objectName, 'GitCatFileSession.read');
     validateMaxBytes(maxBytes, 'GitCatFileSession.read');
     return await this._serialize(async () => {
-      await this._session.write(`contents ${objectName}\n`);
-      await this._flush();
+      await this._send(`contents ${objectName}\n`);
       return await this._readResponse(objectName, maxBytes);
     });
   }
@@ -70,52 +94,27 @@ export default class GitCatFileSession {
    * @returns {Promise<ReadonlyArray<{oid: string, type: string, size: number, content: Uint8Array}>>}
    */
   async readMany(objectNames, { maxBytes = DEFAULT_MAX_BUFFER_SIZE } = {}) {
-    if (!Array.isArray(objectNames)) {
-      throw new InvalidArgumentError('objectNames must be an array', 'GitCatFileSession.readMany');
-    }
-    for (const objectName of objectNames) {
-      validateObjectName(objectName, 'GitCatFileSession.readMany');
-    }
-    if (objectNames.length > MAX_BATCH_OBJECTS) {
-      throw new InvalidArgumentError(
-        `A cat-file batch may contain at most ${MAX_BATCH_OBJECTS} objects`,
-        'GitCatFileSession.readMany',
-        { count: objectNames.length, maxObjects: MAX_BATCH_OBJECTS }
-      );
-    }
+    const batch = buildBatchCommand(objectNames, 'contents', 'GitCatFileSession.readMany');
     validateMaxBytes(maxBytes, 'GitCatFileSession.readMany');
-    if (objectNames.length === 0) {
+    if (batch.objectNames.length === 0) {
       return Object.freeze([]);
     }
-    const commands = objectNames.map((name) => `contents ${name}\n`);
-    const commandBytes = commands.reduce(
-      (total, command) => total + ENCODER.encode(command).length,
-      0
-    );
-    if (commandBytes > MAX_BATCH_COMMAND_BYTES) {
-      throw new InvalidArgumentError(
-        `A cat-file batch command may contain at most ${MAX_BATCH_COMMAND_BYTES} bytes`,
-        'GitCatFileSession.readMany',
-        { commandBytes, maxBytes: MAX_BATCH_COMMAND_BYTES }
-      );
-    }
     return await this._serialize(async () => {
-      await this._session.write(commands.join(''));
-      await this._flush();
+      await this._send(batch.command);
       const objects = [];
       let remainingBytes = maxBytes;
-      for (let index = 0; index < objectNames.length; index += 1) {
+      for (let index = 0; index < batch.objectNames.length; index += 1) {
         try {
-          const object = await this._readResponse(objectNames[index], remainingBytes);
+          const object = await this._readResponse(batch.objectNames[index], remainingBytes);
           objects.push(object);
           remainingBytes -= object.size;
         } catch (error) {
-          for (let remaining = index + 1; remaining < objectNames.length; remaining += 1) {
+          for (let remaining = index + 1; remaining < batch.objectNames.length; remaining += 1) {
             if (this._closed) {
               break;
             }
             try {
-              await this._readResponse(objectNames[remaining], 0);
+              await this._readResponse(batch.objectNames[remaining], 0);
             } catch (drainError) {
               if (!isRecoverableReadError(drainError)) {
                 await this.terminate();
@@ -186,6 +185,23 @@ export default class GitCatFileSession {
     return Object.freeze({ ...info, content });
   }
 
+  async _drainInfoBatch(objectNames, startIndex) {
+    for (let index = startIndex; index < objectNames.length; index += 1) {
+      if (this._closed) {
+        return;
+      }
+      try {
+        const line = DECODER.decode(await this._reader.readLine());
+        this._parseInfo(line, objectNames[index]);
+      } catch (error) {
+        if (!isRecoverableReadError(error)) {
+          await this.terminate();
+          return;
+        }
+      }
+    }
+  }
+
   async _readTerminator(objectName) {
     const terminator = await this._reader.readExactly(1);
     if (terminator[0] !== 0x0a) {
@@ -198,7 +214,7 @@ export default class GitCatFileSession {
   }
 
   _parseInfo(line, objectName) {
-    const fields = line.trim().split(' ');
+    const fields = line.split(' ');
     if (fields.length === 2 && fields[1] === 'missing') {
       throw new GitObjectMissingError(objectName, 'GitCatFileSession._parseInfo');
     }
@@ -219,10 +235,8 @@ export default class GitCatFileSession {
     return Object.freeze({ oid: fields[0], type: fields[1], size });
   }
 
-  async _flush() {
-    if (this._buffered) {
-      await this._session.write('flush\n');
-    }
+  async _send(command) {
+    await this._session.write(this._buffered ? `${command}flush\n` : command);
   }
 
   async _serialize(operation) {
@@ -260,6 +274,33 @@ function validateObjectName(objectName, operation) {
   ) {
     throw new InvalidArgumentError('Invalid Git object name', operation, { objectName });
   }
+}
+
+function buildBatchCommand(objectNames, verb, operation) {
+  if (!Array.isArray(objectNames)) {
+    throw new InvalidArgumentError('objectNames must be an array', operation);
+  }
+  const snapshot = Object.freeze([...objectNames]);
+  for (const objectName of snapshot) {
+    validateObjectName(objectName, operation);
+  }
+  if (snapshot.length > MAX_BATCH_OBJECTS) {
+    throw new InvalidArgumentError(
+      `A cat-file batch may contain at most ${MAX_BATCH_OBJECTS} objects`,
+      operation,
+      { count: snapshot.length, maxObjects: MAX_BATCH_OBJECTS }
+    );
+  }
+  const command = snapshot.map((name) => `${verb} ${name}\n`).join('');
+  const commandBytes = ENCODER.encode(command).length;
+  if (commandBytes > MAX_BATCH_COMMAND_BYTES) {
+    throw new InvalidArgumentError(
+      `A cat-file batch command may contain at most ${MAX_BATCH_COMMAND_BYTES} bytes`,
+      operation,
+      { commandBytes, maxBytes: MAX_BATCH_COMMAND_BYTES }
+    );
+  }
+  return Object.freeze({ command, objectNames: snapshot });
 }
 
 function validateMaxBytes(maxBytes, operation) {

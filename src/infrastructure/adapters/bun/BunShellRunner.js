@@ -18,7 +18,9 @@ export default class BunShellRunner {
    */
   async open({ command, args, cwd, timeout, maxStderrBytes, env: envOverrides }) {
     const baseEnv = EnvironmentPolicy.filter(globalThis.process?.env || {});
-    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
+    const env = envOverrides
+      ? { ...baseEnv, ...EnvironmentPolicy.filterOverrides(envOverrides) }
+      : baseEnv;
     let child;
     try {
       child = Bun.spawn([command, ...args], {
@@ -26,7 +28,7 @@ export default class BunShellRunner {
         env,
         stdin: 'pipe',
         stdout: 'pipe',
-        stderr: 'pipe'
+        stderr: 'pipe',
       });
     } catch (error) {
       return new FailedSessionRunnerResult(error);
@@ -49,7 +51,7 @@ export default class BunShellRunner {
           signal: null,
           stderr: await stderrPromise,
           terminated,
-          timedOut
+          timedOut,
         };
       } catch (error) {
         if (timeoutId) {
@@ -62,7 +64,7 @@ export default class BunShellRunner {
           signal: null,
           stderr: await stderrPromise,
           terminated,
-          timedOut
+          timedOut,
         };
       } finally {
         if (timeoutId) {
@@ -104,7 +106,7 @@ export default class BunShellRunner {
         } catch {
           // Termination is idempotent.
         }
-      }
+      },
     });
   }
 
@@ -115,7 +117,9 @@ export default class BunShellRunner {
   async run({ command, args, cwd, input, timeout, env: envOverrides }) {
     // Create a clean environment using Domain Policy
     const baseEnv = EnvironmentPolicy.filter(globalThis.process?.env || {});
-    const env = envOverrides ? { ...baseEnv, ...EnvironmentPolicy.filter(envOverrides) } : baseEnv;
+    const env = envOverrides
+      ? { ...baseEnv, ...EnvironmentPolicy.filterOverrides(envOverrides) }
+      : baseEnv;
 
     const process = Bun.spawn([command, ...args], {
       cwd,
@@ -134,14 +138,19 @@ export default class BunShellRunner {
 
     const exitPromise = (async () => {
       let timeoutId;
-      const timeoutPromise = timeout && timeout > 0
-        ? new Promise((resolve) => {
-            timeoutId = setTimeout(() => {
-              try { process.kill(); } catch { /* ignore */ }
-              resolve({ code: 1, stderr: 'Command timed out', timedOut: true });
-            }, timeout);
-          })
-        : null;
+      const timeoutPromise =
+        timeout && timeout > 0
+          ? new Promise((resolve) => {
+              timeoutId = setTimeout(() => {
+                try {
+                  process.kill();
+                } catch {
+                  /* ignore */
+                }
+                resolve({ code: 1, stderr: 'Command timed out', timedOut: true });
+              }, timeout);
+            })
+          : null;
 
       const completionPromise = (async () => {
         const code = await process.exited;
@@ -161,7 +170,7 @@ export default class BunShellRunner {
 
     return RunnerResultSchema.parse({
       stdoutStream: process.stdout,
-      exitPromise
+      exitPromise,
     });
   }
 }

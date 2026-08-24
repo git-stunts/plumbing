@@ -69,8 +69,8 @@ const commitSha = await git.createCommitFromFiles({
   parents: [GitSha.from(await git.revParse({ revision: 'HEAD' }))],
   files: [
     { path: 'manifest.json', content: JSON.stringify({ version: '1.0' }) },
-    { path: 'data.bin', content: new Uint8Array([0xDE, 0xAD, 0xBE, 0xEF]) }
-  ]
+    { path: 'data.bin', content: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) },
+  ],
 });
 ```
 
@@ -83,7 +83,7 @@ unrestricted `git prune` remains prohibited by the command sanitizer.
 ```javascript
 const plumbing = await GitPlumbing.createDefault({ cwd: './my-repo' });
 const stream = await plumbing.inspectPrunableObjects({
-  expiresBefore: '2026-07-01T00:00:00.000Z'
+  expiresBefore: '2026-07-01T00:00:00.000Z',
 });
 
 for await (const chunk of stream) {
@@ -102,8 +102,9 @@ const plumbing = await GitPlumbing.createDefault({ cwd: './my-repo' });
 const objects = await plumbing.openCatFileSession();
 
 try {
+  const metadata = await objects.infoMany([firstOid, secondOid]);
   const values = await objects.readMany([firstOid, secondOid], {
-    maxBytes: 8 * 1024 * 1024
+    maxBytes: 8 * 1024 * 1024,
   });
   for (const { oid, type, content } of values) {
     consume(oid, type, content);
@@ -119,13 +120,36 @@ fails with `OBJECT_BUFFER_LIMIT_EXCEEDED`, and the session remains aligned for
 later requests. The default budget is 10 MiB.
 
 Additional typed protocols are available through `openMktreeSession()` and
-`openFastImportSession()`. Tree entries may be supplied as an iterable or async
-iterable, so the wrapper does not construct a second whole-tree buffer.
+`openFastImportSession()`. A single tree supplied to `write()` remains iterable
+or async iterable and is streamed without constructing a second whole-tree
+buffer. `writeMany()` assembles one bounded framed write for up to 256
+independent trees, while `writeBlobs()` assembles one bounded protocol write for
+up to 256 blobs under a caller-selectable content budget capped at 64 MiB.
+`infoMany()` accepts up to 1,000 object names under a 64 KiB command budget. All
+batch results preserve input order.
+
+`openUpdateRefSession()` reuses one `git update-ref --stdin` process across
+explicit update-ref transactions. Its `update()` method performs an
+unconditional update when `expectedOldOid` is `undefined`; `null` means
+create-only and an OID means compare-and-swap. It validates Git's ordered
+start/prepare/commit acknowledgements. A rejected or malformed transaction
+poisons the session.
+`noDeref` is explicit; on the minimum supported Git, consumers must retain any
+separate symbolic-ref safety check they require.
 
 Sessions have no implicit timeout. Their owner must call `close()` for orderly
 completion or `terminate()`/`abort()` when abandoning work. Plumbing owns the
 process and Git protocol mechanics only; callers such as `@git-stunts/git-cas`
 own pooling, chunking, caching, retention, and eviction policy.
+
+The Docker-only microbenchmark compares one-at-a-time operations with bounded
+batch windows or a persistent ref session against fresh SHA-256 repositories.
+It records elapsed time, Git process topology, stdin write count, and exact
+object-identity witnesses:
+
+```bash
+docker compose run --build --rm node-test npm run benchmark:protocol-sessions
+```
 
 ## 📖 Deep Dives
 

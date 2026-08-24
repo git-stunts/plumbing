@@ -12,7 +12,7 @@ The `executeStream` method returns a `GitStream` wrapper that implements the `As
 
 ```javascript
 const stream = await git.executeStream({
-  args: ['cat-file', '-p', largeSha]
+  args: ['cat-file', '-p', largeSha],
 });
 
 for await (const chunk of stream) {
@@ -55,7 +55,7 @@ ShellRunnerFactory.register('ssh-cloud', MyCustomSSHRunner);
 
 const git = await GitPlumbing.createRepository({
   cwd: '/remote/path',
-  env: 'ssh-cloud' // Use the registered name
+  env: 'ssh-cloud', // Use the registered name
 });
 ```
 
@@ -67,8 +67,9 @@ spawn one Git process per request:
 ```javascript
 const objects = await git.openCatFileSession();
 try {
-  const object = await objects.read(oid, { maxBytes: 4 * 1024 * 1024 });
-  processObject(object);
+  const metadata = await objects.infoMany(oids);
+  const values = await objects.readMany(oids, { maxBytes: 4 * 1024 * 1024 });
+  processObjects(metadata, values);
 } finally {
   await objects.close();
 }
@@ -82,11 +83,40 @@ The available wrappers are:
   `git mktree --batch -z`.
 - `openFastImportSession()`: Caller-bounded blob writes and explicit checkpoints
   through `git fast-import`.
+- `openUpdateRefSession()`: Repeated explicit compare-and-swap transactions
+  through `git update-ref --stdin`.
 
 `read()` buffers at most its `maxBytes` budget. `readMany()` applies that budget
 to the total retained content, not independently to every object. A rejected
 oversized response is drained so the process remains usable. Callers handling
 objects larger than the budget should chunk them at their storage boundary.
+
+The session batch surfaces pipeline requests before consuming their ordered
+responses:
+
+```javascript
+const blobs = await git.openFastImportSession();
+const trees = await git.openMktreeSession();
+try {
+  const blobOids = await blobs.writeBlobs(payloads, {
+    maxBytes: 32 * 1024 * 1024,
+  });
+  await blobs.checkpoint();
+  const treeOids = await trees.writeMany(treeEntryGroups);
+  consumeObjectIds(blobOids, treeOids);
+} finally {
+  await Promise.all([blobs.close(), trees.close()]);
+}
+```
+
+`infoMany()` accepts at most 1,000 names and 64 KiB of commands.
+`writeBlobs()` accepts at most 256 blobs and 64 MiB of content; callers may
+lower the byte ceiling. `writeMany()` accepts at most 256 trees, 65,536 total
+entries, and 64 MiB of framed input. The write batches are assembled into one
+bounded stdin chunk before protocol state changes; this both gives validation
+failures a reusable-session boundary and removes per-object JavaScript writes.
+These fixed ceilings also bound pending protocol responses so a batch cannot
+fill the child-process stdout pipe before the reader begins consuming it.
 
 Fast-import blobs become externally visible after `checkpoint()` or `close()`.
 Always close typed sessions in `finally`. Raw `openSession()` callers must also
@@ -95,6 +125,15 @@ await `session.finished`.
 
 These wrappers do not pool themselves. A higher storage layer decides whether
 to reuse, expire, or replace a session and owns all cache and retention policy.
+
+Ref transactions validate `start: ok`, `prepare: ok`, and `commit: ok` before
+returning. A CAS rejection ends the Git process and poisons the typed session;
+the owning storage layer decides whether and when to open a replacement. Passing
+`expectedOldOid: null` requires the ref to be absent, while `undefined` requests
+an unconditional update. Set `noDeref: true` only when overwriting the named ref
+itself is intended. Git versions in the minimum support range do not expose the
+newer `symref-verify` protocol command, so a consumer that forbids symbolic refs
+must keep its own preflight rather than treating `noDeref` as a type check.
 
 ## 4. Resilience & Retry Policies
 
@@ -107,12 +146,12 @@ const customPolicy = new CommandRetryPolicy({
   maxRetries: 5,
   baseDelayMs: 100,
   maxDelayMs: 2000,
-  totalTimeoutMs: 10000
+  totalTimeoutMs: 10000,
 });
 
 await git.execute({
   args: ['update-ref', 'refs/heads/main', newSha],
-  retryPolicy: customPolicy
+  retryPolicy: customPolicy,
 });
 ```
 
@@ -125,10 +164,10 @@ const traceId = `request-${Date.now()}`;
 
 await git.execute({
   args: ['rev-parse', 'HEAD'],
-  traceId
+  traceId,
 });
 
-// The traceId is passed into the CommandRunner and is available in 
+// The traceId is passed into the CommandRunner and is available in
 // GitPlumbingError if the command fails.
 ```
 

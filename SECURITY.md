@@ -25,9 +25,14 @@ By default, Git processes run in a "Clean Environment." We only whitelist variab
 
 - `GIT_AUTHOR_*` & `GIT_COMMITTER_*`: For cryptographic identity.
 - `LANG` & `LC_ALL`: To ensure consistent character encoding.
-- `PATH`: To locate the Git binary.
+- Inherited `PATH`: To locate the operator's Git binary.
+- Inherited `HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, and `USERPROFILE`:
+  To locate the operator's Git configuration.
 
 Variables like `GIT_CONFIG_PARAMETERS` are explicitly blocked to prevent configuration injection.
+Executable and configuration-discovery paths are inherited only; per-call
+environment overrides cannot redirect them to caller-selected files or
+directories.
 
 ## 🌊 OOM & Resource Protection
 

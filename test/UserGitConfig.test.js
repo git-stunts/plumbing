@@ -25,6 +25,8 @@ describe('User git configuration', () => {
 
   const CONFIGURED_NAME = 'Configured Operator';
   const CONFIGURED_EMAIL = 'operator@example.com';
+  const CALLER_NAME = 'Caller Override';
+  const CALLER_EMAIL = 'caller@example.com';
 
   beforeAll(() => {
     const stamp = Math.random().toString(36).substring(7);
@@ -67,11 +69,31 @@ describe('User git configuration', () => {
 
     const tree = await git.execute({ args: ['write-tree'] });
     const commit = await git.execute({
-      args: ['commit-tree', tree.trim(), '-m', 'configured identity']
+      args: ['commit-tree', tree.trim(), '-m', 'configured identity'],
     });
 
     const author = await git.execute({
-      args: ['log', '-1', '--format=%an <%ae>', commit.trim()]
+      args: ['log', '-1', '--format=%an <%ae>', commit.trim()],
+    });
+
+    expect(author.trim()).toBe(`${CONFIGURED_NAME} <${CONFIGURED_EMAIL}>`);
+  });
+
+  it('does not let a caller replace inherited configuration with GIT_CONFIG_GLOBAL', async () => {
+    const callerConfig = path.join(homePath, 'caller.gitconfig');
+    fs.writeFileSync(callerConfig, `[user]\n\tname = ${CALLER_NAME}\n\temail = ${CALLER_EMAIL}\n`);
+
+    const git = await GitPlumbing.createDefault({ cwd: repoPath });
+    await git.execute({ args: ['init'] });
+
+    const tree = await git.execute({ args: ['write-tree'] });
+    const commit = await git.execute({
+      args: ['commit-tree', tree.trim(), '-m', 'trusted configuration'],
+      env: { GIT_CONFIG_GLOBAL: callerConfig },
+    });
+
+    const author = await git.execute({
+      args: ['log', '-1', '--format=%an <%ae>', commit.trim()],
     });
 
     expect(author.trim()).toBe(`${CONFIGURED_NAME} <${CONFIGURED_EMAIL}>`);

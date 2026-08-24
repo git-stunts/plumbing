@@ -14,6 +14,11 @@ const INVALID_REF_BACKSLASH = 'refs/heads\\main';
 const INVALID_REF_CONTROL_CHARS = 'refs/heads/main\x00';
 const INVALID_REF_SPACE = 'refs/heads/main branch';
 const INVALID_REF_CONSECUTIVE_SLASHES = 'refs//heads/main';
+const INVALID_REF_PATHS = [
+  '/refs/heads/leading',
+  'refs/heads/trailing/',
+  'refs/heads/bad.lock/child',
+];
 
 describe('GitRef', () => {
   describe('constructor', () => {
@@ -24,7 +29,9 @@ describe('GitRef', () => {
 
     it('throws error for invalid reference string', () => {
       expect(() => new GitRef(INVALID_REF_DOT_START)).toThrow(ValidationError);
-      expect(() => new GitRef(INVALID_REF_DOT_START)).toThrow('Invalid Git reference: .refs/heads/main');
+      expect(() => new GitRef(INVALID_REF_DOT_START)).toThrow(
+        'Invalid Git reference: .refs/heads/main'
+      );
     });
 
     it('throws error for reference starting with dot', () => {
@@ -67,6 +74,12 @@ describe('GitRef', () => {
       expect(() => new GitRef(INVALID_REF_CONSECUTIVE_SLASHES)).toThrow();
     });
 
+    for (const ref of INVALID_REF_PATHS) {
+      it(`throws error for Git-incompatible path ${ref}`, () => {
+        expect(() => new GitRef(ref)).toThrow(ValidationError);
+      });
+    }
+
     it("allows '@' if it doesn't form reflog sequence", () => {
       expect(() => new GitRef('refs/heads/user@feature')).not.toThrow();
     });
@@ -104,7 +117,9 @@ describe('GitRef', () => {
     });
 
     it('throws error for invalid string', () => {
-      expect(() => GitRef.fromString(INVALID_REF_DOT_START)).toThrow('Invalid Git reference: .refs/heads/main');
+      expect(() => GitRef.fromString(INVALID_REF_DOT_START)).toThrow(
+        'Invalid Git reference: .refs/heads/main'
+      );
     });
   });
 

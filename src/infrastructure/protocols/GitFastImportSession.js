@@ -4,6 +4,8 @@ import ByteReader from '../ByteReader.js';
 
 const DECODER = new TextDecoder();
 const ENCODER = new TextEncoder();
+const MAX_BATCH_BYTES = 64 * 1024 * 1024;
+const MAX_BATCH_OBJECTS = 256;
 
 /**
  * Blob writer backed by one `git fast-import` process.
@@ -29,20 +31,43 @@ export default class GitFastImportSession {
    * @returns {Promise<string>}
    */
   async writeBlob(content) {
-    if (typeof content !== 'string' && !(content instanceof Uint8Array)) {
-      throw new InvalidArgumentError(
-        'Blob content must be a string or Uint8Array',
-        'GitFastImportSession.writeBlob'
-      );
-    }
-    const bytes = typeof content === 'string' ? ENCODER.encode(content) : content;
+    const bytes = encodeBlob(content, 'GitFastImportSession.writeBlob');
     return await this._serialize(async () => {
       const mark = this._nextMark;
       this._nextMark += 1;
-      await this._session.write(`blob\nmark :${mark}\ndata ${bytes.length}\n`);
-      await this._session.write(bytes);
-      await this._session.write(`\nget-mark :${mark}\n`);
+      for (const chunk of encodeBlobRequestChunks(bytes, mark)) {
+        await this._session.write(chunk);
+      }
       return await this._readOid();
+    });
+  }
+
+  /**
+   * Pipelines one bounded blob group and returns OIDs in input order.
+   * Objects become externally visible after checkpoint() or close().
+   * @param {Array<string|Uint8Array>} contents
+   * @param {Object} [options]
+   * @param {number} [options.maxBytes=MAX_BATCH_BYTES]
+   * @returns {Promise<ReadonlyArray<string>>}
+   */
+  async writeBlobs(contents, { maxBytes = MAX_BATCH_BYTES } = {}) {
+    const blobs = prepareBlobBatch(contents, maxBytes);
+    if (blobs.length === 0) {
+      return Object.freeze([]);
+    }
+    return await this._serialize(async () => {
+      const firstMark = this._nextMark;
+      const chunks = [];
+      for (let index = 0; index < blobs.length; index += 1) {
+        chunks.push(...encodeBlobRequestChunks(blobs[index], firstMark + index));
+      }
+      this._nextMark += blobs.length;
+      await this._session.write(concatBytes(chunks));
+      const oids = [];
+      for (let index = 0; index < blobs.length; index += 1) {
+        oids.push(await this._readOid());
+      }
+      return Object.freeze(oids);
     });
   }
 
@@ -139,4 +164,60 @@ export default class GitFastImportSession {
     this._tail = current.catch(() => {});
     return await current;
   }
+}
+
+function encodeBlob(content, operation) {
+  if (typeof content !== 'string' && !(content instanceof Uint8Array)) {
+    throw new InvalidArgumentError('Blob content must be a string or Uint8Array', operation);
+  }
+  return typeof content === 'string' ? ENCODER.encode(content) : content;
+}
+
+function encodeBlobRequestChunks(bytes, mark) {
+  return [
+    ENCODER.encode(`blob\nmark :${mark}\ndata ${bytes.length}\n`),
+    bytes,
+    ENCODER.encode(`\nget-mark :${mark}\n`),
+  ];
+}
+
+function concatBytes(chunks) {
+  const totalBytes = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const result = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
+function prepareBlobBatch(contents, maxBytes) {
+  if (!Array.isArray(contents)) {
+    throw new InvalidArgumentError('contents must be an array', 'GitFastImportSession.writeBlobs');
+  }
+  if (contents.length > MAX_BATCH_OBJECTS) {
+    throw new InvalidArgumentError(
+      `A fast-import batch may contain at most ${MAX_BATCH_OBJECTS} blobs`,
+      'GitFastImportSession.writeBlobs',
+      { count: contents.length, maxObjects: MAX_BATCH_OBJECTS }
+    );
+  }
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > MAX_BATCH_BYTES) {
+    throw new InvalidArgumentError(
+      `maxBytes must be between 1 and ${MAX_BATCH_BYTES}`,
+      'GitFastImportSession.writeBlobs',
+      { maxBytes }
+    );
+  }
+  const blobs = contents.map((content) => encodeBlob(content, 'GitFastImportSession.writeBlobs'));
+  const totalBytes = blobs.reduce((total, bytes) => total + bytes.length, 0);
+  if (totalBytes > maxBytes) {
+    throw new InvalidArgumentError(
+      `Fast-import batch content exceeds ${maxBytes} bytes`,
+      'GitFastImportSession.writeBlobs',
+      { maxBytes, totalBytes }
+    );
+  }
+  return blobs;
 }
