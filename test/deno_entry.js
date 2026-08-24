@@ -3,6 +3,7 @@ import './deno_shim.js';
 
 // Import all tests to run them in one Deno process with the shim
 import './GitBlob.test.js';
+import './Changelog.test.js';
 import './GitProtocolSessions.test.js';
 import './GitCommitFlow.test.js';
 import './GitRef.test.js';
