@@ -163,6 +163,43 @@ describe('long-lived Git protocol sessions', () => {
     await reader.close();
   });
 
+  it('snapshots metadata batch names before the operation is queued', async () => {
+    const output = `${firstOid} blob 12\n${secondOid} blob 13\n`;
+    const scripted = gatedSession(output, 1);
+    const reader = new GitCatFileSession(scripted.session);
+    const objectNames = [firstOid, secondOid];
+
+    try {
+      const metadata = reader.infoMany(objectNames);
+      objectNames.pop();
+
+      await expect(metadata).resolves.toEqual([
+        { oid: firstOid, type: 'blob', size: 12 },
+        { oid: secondOid, type: 'blob', size: 13 },
+      ]);
+    } finally {
+      await reader.close();
+    }
+  });
+
+  it('snapshots content batch names before the operation is queued', async () => {
+    const output = `${firstOid} blob 1\na\n${secondOid} blob 1\nb\n`;
+    const scripted = gatedSession(output, 1);
+    const reader = new GitCatFileSession(scripted.session);
+    const objectNames = [firstOid, secondOid];
+
+    try {
+      const objects = reader.readMany(objectNames, { maxBytes: 2 });
+      objectNames.pop();
+
+      await expect(objects.then((values) => values.map(({ content }) =>
+        DECODER.decode(content)
+      ))).resolves.toEqual(['a', 'b']);
+    } finally {
+      await reader.close();
+    }
+  });
+
   it('drains a failed cat-file batch and remains usable', async () => {
     const reader = await git.openCatFileSession();
     const missingOid = '0'.repeat(firstOid.length);

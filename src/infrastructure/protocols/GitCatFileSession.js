@@ -50,23 +50,23 @@ export default class GitCatFileSession {
    * @returns {Promise<ReadonlyArray<{oid: string, type: string, size: number}>>}
    */
   async infoMany(objectNames) {
-    const command = buildBatchCommand(
+    const batch = buildBatchCommand(
       objectNames,
       'info',
       'GitCatFileSession.infoMany'
     );
-    if (objectNames.length === 0) {
+    if (batch.objectNames.length === 0) {
       return Object.freeze([]);
     }
     return await this._serialize(async () => {
-      await this._send(command);
+      await this._send(batch.command);
       const objects = [];
-      for (let index = 0; index < objectNames.length; index += 1) {
+      for (let index = 0; index < batch.objectNames.length; index += 1) {
         try {
           const line = DECODER.decode(await this._reader.readLine());
-          objects.push(this._parseInfo(line, objectNames[index]));
+          objects.push(this._parseInfo(line, batch.objectNames[index]));
         } catch (error) {
-          await this._drainInfoBatch(objectNames, index + 1);
+          await this._drainInfoBatch(batch.objectNames, index + 1);
           throw error;
         }
       }
@@ -98,31 +98,35 @@ export default class GitCatFileSession {
    * @returns {Promise<ReadonlyArray<{oid: string, type: string, size: number, content: Uint8Array}>>}
    */
   async readMany(objectNames, { maxBytes = DEFAULT_MAX_BUFFER_SIZE } = {}) {
-    const command = buildBatchCommand(
+    const batch = buildBatchCommand(
       objectNames,
       'contents',
       'GitCatFileSession.readMany'
     );
     validateMaxBytes(maxBytes, 'GitCatFileSession.readMany');
-    if (objectNames.length === 0) {
+    if (batch.objectNames.length === 0) {
       return Object.freeze([]);
     }
     return await this._serialize(async () => {
-      await this._send(command);
+      await this._send(batch.command);
       const objects = [];
       let remainingBytes = maxBytes;
-      for (let index = 0; index < objectNames.length; index += 1) {
+      for (let index = 0; index < batch.objectNames.length; index += 1) {
         try {
-          const object = await this._readResponse(objectNames[index], remainingBytes);
+          const object = await this._readResponse(batch.objectNames[index], remainingBytes);
           objects.push(object);
           remainingBytes -= object.size;
         } catch (error) {
-          for (let remaining = index + 1; remaining < objectNames.length; remaining += 1) {
+          for (
+            let remaining = index + 1;
+            remaining < batch.objectNames.length;
+            remaining += 1
+          ) {
             if (this._closed) {
               break;
             }
             try {
-              await this._readResponse(objectNames[remaining], 0);
+              await this._readResponse(batch.objectNames[remaining], 0);
             } catch (drainError) {
               if (!isRecoverableReadError(drainError)) {
                 await this.terminate();
@@ -288,17 +292,18 @@ function buildBatchCommand(objectNames, verb, operation) {
   if (!Array.isArray(objectNames)) {
     throw new InvalidArgumentError('objectNames must be an array', operation);
   }
-  for (const objectName of objectNames) {
+  const snapshot = Object.freeze([...objectNames]);
+  for (const objectName of snapshot) {
     validateObjectName(objectName, operation);
   }
-  if (objectNames.length > MAX_BATCH_OBJECTS) {
+  if (snapshot.length > MAX_BATCH_OBJECTS) {
     throw new InvalidArgumentError(
       `A cat-file batch may contain at most ${MAX_BATCH_OBJECTS} objects`,
       operation,
-      { count: objectNames.length, maxObjects: MAX_BATCH_OBJECTS }
+      { count: snapshot.length, maxObjects: MAX_BATCH_OBJECTS }
     );
   }
-  const command = objectNames.map((name) => `${verb} ${name}\n`).join('');
+  const command = snapshot.map((name) => `${verb} ${name}\n`).join('');
   const commandBytes = ENCODER.encode(command).length;
   if (commandBytes > MAX_BATCH_COMMAND_BYTES) {
     throw new InvalidArgumentError(
@@ -307,7 +312,7 @@ function buildBatchCommand(objectNames, verb, operation) {
       { commandBytes, maxBytes: MAX_BATCH_COMMAND_BYTES }
     );
   }
-  return command;
+  return Object.freeze({ command, objectNames: snapshot });
 }
 
 function validateMaxBytes(maxBytes, operation) {
