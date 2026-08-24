@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Strict Cat-File Transcripts**: Metadata responses with non-protocol leading
+  or trailing whitespace now poison the session instead of being normalized.
+
 - **Exact Git Reference Validation**: Reference values now reject leading or
   trailing slashes and `.lock` path components before reaching Git protocol
   state.

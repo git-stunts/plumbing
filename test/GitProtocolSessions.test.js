@@ -270,6 +270,14 @@ describe('long-lived Git protocol sessions', () => {
     await expect(reader.info(firstOid)).rejects.toBeInstanceOf(GitProtocolError);
   });
 
+  it('poisons metadata batches that contain non-protocol whitespace', async () => {
+    const scripted = gatedSession(` ${firstOid} blob 12\n`, 1);
+    const reader = new GitCatFileSession(scripted.session);
+
+    await expect(reader.infoMany([firstOid])).rejects.toBeInstanceOf(GitProtocolError);
+    expect(scripted.terminateCalls()).toBe(1);
+  });
+
   it('writes NUL-framed trees through one mktree process', async () => {
     const writer = await git.openMktreeSession();
     expect(writer).toBeInstanceOf(GitMktreeSession);

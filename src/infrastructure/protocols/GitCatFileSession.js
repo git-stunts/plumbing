@@ -226,7 +226,7 @@ export default class GitCatFileSession {
   }
 
   _parseInfo(line, objectName) {
-    const fields = line.trim().split(' ');
+    const fields = line.split(' ');
     if (fields.length === 2 && fields[1] === 'missing') {
       throw new GitObjectMissingError(objectName, 'GitCatFileSession._parseInfo');
     }
