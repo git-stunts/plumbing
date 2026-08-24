@@ -8,6 +8,7 @@ import "./GitCommitFlow.test.js";
 import "./GitRef.test.js";
 import "./GitSha.test.js";
 import "./PruneInspection.test.js";
+import "./RepositoryFormatting.test.js";
 import "./ShellRunner.test.js";
 import "./CommandSession.test.js";
 import "./StreamCompletion.test.js";

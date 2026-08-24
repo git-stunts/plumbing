@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Deterministic Formatting**: Prettier configuration now lives in the
+  repository instead of depending on configuration in a checkout's parent
+  directories.
+
 - **Strict Cat-File Transcripts**: Metadata responses with non-protocol leading
   or trailing whitespace now poison the session instead of being normalized.
 
