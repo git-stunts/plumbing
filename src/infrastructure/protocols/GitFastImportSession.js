@@ -35,7 +35,9 @@ export default class GitFastImportSession {
     return await this._serialize(async () => {
       const mark = this._nextMark;
       this._nextMark += 1;
-      await this._session.write(encodeBlobRequest(bytes, mark));
+      for (const chunk of encodeBlobRequestChunks(bytes, mark)) {
+        await this._session.write(chunk);
+      }
       return await this._readOid();
     });
   }
@@ -169,10 +171,6 @@ function encodeBlob(content, operation) {
     throw new InvalidArgumentError('Blob content must be a string or Uint8Array', operation);
   }
   return typeof content === 'string' ? ENCODER.encode(content) : content;
-}
-
-function encodeBlobRequest(bytes, mark) {
-  return concatBytes(encodeBlobRequestChunks(bytes, mark));
 }
 
 function encodeBlobRequestChunks(bytes, mark) {

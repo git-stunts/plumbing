@@ -326,6 +326,23 @@ describe('long-lived Git protocol sessions', () => {
     await expect(writer.writeBlob('late')).rejects.toBeInstanceOf(GitProtocolError);
   });
 
+  it('streams one unbounded blob without duplicating its content buffer', async () => {
+    const oid = 'a'.repeat(firstOid.length);
+    const scripted = gatedSession(`${oid}\n`, 1);
+    const writer = new GitFastImportSession(scripted.session);
+    const content = Uint8Array.of(1, 2, 3);
+
+    try {
+      await expect(writer.writeBlob(content)).resolves.toBe(oid);
+      expect(scripted.writes).toHaveLength(3);
+      expect(DECODER.decode(scripted.writes[0])).toBe('blob\nmark :1\ndata 3\n');
+      expect(scripted.writes[1]).toEqual(content);
+      expect(DECODER.decode(scripted.writes[2])).toBe('\nget-mark :1\n');
+    } finally {
+      await writer.close();
+    }
+  });
+
   it('pipelines bounded blob batches before consuming ordered marks', async () => {
     const firstBlob = 'a'.repeat(firstOid.length);
     const secondBlob = 'b'.repeat(firstOid.length);
