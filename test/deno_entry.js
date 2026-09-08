@@ -13,6 +13,7 @@ import './PruneInspection.test.js';
 import './RepositoryFormatting.test.js';
 import './ShellRunner.test.js';
 import './CommandSession.test.js';
+import './NodeSessionLifecycle.test.js';
 import './StreamCompletion.test.js';
 import './Streaming.test.js';
 import './domain/entities/GitCommit.test.js';

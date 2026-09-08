@@ -15,6 +15,13 @@ import FailedSessionRunnerResult from '../../FailedSessionRunnerResult.js';
  */
 export default class NodeShellRunner {
   /**
+   * @param {{spawnProcess?: typeof spawn}} [host] Node process boundary.
+   */
+  constructor({ spawnProcess = spawn } = {}) {
+    this._spawn = spawnProcess;
+  }
+
+  /**
    * Opens a long-lived duplex command session.
    * @type {import('../../../ports/CommandSessionRunnerPort.js').CommandSessionRunner}
    */
@@ -25,7 +32,7 @@ export default class NodeShellRunner {
       : baseEnv;
     let child;
     try {
-      child = spawn(command, args, { cwd, env });
+      child = this._spawn(command, args, { cwd, env });
     } catch (error) {
       return new FailedSessionRunnerResult(error);
     }
@@ -134,7 +141,7 @@ export default class NodeShellRunner {
       ? { ...baseEnv, ...EnvironmentPolicy.filterOverrides(envOverrides) }
       : baseEnv;
 
-    const child = spawn(command, args, { cwd, env });
+    const child = this._spawn(command, args, { cwd, env });
 
     if (child.stdin) {
       if (input) {
