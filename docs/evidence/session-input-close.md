@@ -71,6 +71,13 @@ ESLint, formatting checks on touched JavaScript, and whitespace checks pass.
 
 The six-test suite and runtime matrix are revalidated by the PR's final CI head.
 
+The first hosted run at `b4cbd46` passed all Node/Bun tests and all six lifecycle
+regressions, but Deno's resource sanitizer caught the existing `Streaming` tests
+returning before their one-shot subprocess completed: a process, timeout, and
+status waiter remained live. Those tests now await `gitStream.finished` and
+assert exit code 0 after consuming stdout. The failed run is retained as the
+red evidence; no retry or sanitizer exemption replaces it.
+
 This failure was found while investigating
 [git-warp #878](https://github.com/git-stunts/git-warp/issues/878). Its original
 CI timeout lacked operation-level diagnostics, so the historical event ordering
