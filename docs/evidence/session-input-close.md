@@ -43,11 +43,19 @@ docker compose -p plumbing-session-close-red run --build --rm node-test \
 
 ## Repair and validation
 
-Input shutdown now listens for `close` as well as `finish` and `error`, and removes
-all temporary listeners on every terminal path. It preserves input errors and
-leaves exit-code validation to the existing protocol/session completion contract.
+Input shutdown now listens for stdin or child-process `close` as well as stdin
+`finish` and `error`, and removes all temporary listeners on every terminal path.
+It preserves input errors and leaves exit-code validation to the existing
+protocol/session completion contract.
 
-The expanded five-test lifecycle suite passes. The focused lifecycle, command
+The git-warp consumer probe then exposed the ordering where child completion
+precedes stdin's close notification. The sixth regression suppresses that
+notification while closing the real writable and completing the controlled
+child. Against `93837f8`, it reports `pending` instead of `fulfilled` (one intended
+failure, five controls passing). Child-process completion now also settles input
+closure, covering this terminal ordering without awaiting another stream event.
+
+The initial five-test lifecycle suite passed. The focused lifecycle, command
 session, shell runner, and real Git protocol suites pass 49 tests. The full
 `COMPOSE_PROJECT_NAME=plumbing-session-close npm test` matrix passes:
 
@@ -61,11 +69,16 @@ ESLint, formatting checks on touched JavaScript, and whitespace checks pass.
 
 ## Scope and remaining evidence
 
+The six-test suite and runtime matrix are revalidated by the PR's final CI head.
+
 This failure was found while investigating
 [git-warp #878](https://github.com/git-stunts/git-warp/issues/878). Its original
 CI timeout lacked operation-level diagnostics, so the historical event ordering
-is unknown. The regression proves a concrete hanging lifecycle and its repair;
-consumer adoption and the git-warp regression remain separate release evidence.
+is unknown. A Node 22 Linux consumer probe uses real Git, advances the git-cas idle
+timer virtually, and holds the writable final callback while allowing real EOF.
+It reproduced pending git-warp history closure on the unfixed adapter and passed
+with the child-completion repair. The original five entity occurrence tests also
+passed. Consumer dependency adoption remains separate release evidence.
 
 The test is retained while Node duplex sessions promise completion. Deletion is
 appropriate only if that capability is removed or a stronger boundary regression

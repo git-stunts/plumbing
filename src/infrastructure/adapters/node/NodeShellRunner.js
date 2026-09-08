@@ -111,6 +111,7 @@ export default class NodeShellRunner {
             child.stdin.off('error', onError);
             child.stdin.off('finish', onClosed);
             child.stdin.off('close', onClosed);
+            child.off('close', onClosed);
           };
           const onError = (error) => {
             cleanup();
@@ -129,6 +130,9 @@ export default class NodeShellRunner {
           // A child can close its pipe without flushing Writable's final hook.
           // Process success remains the responsibility of session.finished.
           child.stdin.once('close', onClosed);
+          // Process completion is terminal even if stdin's close notification
+          // is delayed behind an unfinished writable callback.
+          child.once('close', onClosed);
           try {
             child.stdin.end();
           } catch (error) {

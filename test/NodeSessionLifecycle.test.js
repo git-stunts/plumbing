@@ -10,12 +10,13 @@ import GitFastImportSession from '../src/infrastructure/protocols/GitFastImportS
 // Oracle: closing session input settles once that input is closed. A process
 // may close stdin without Writable's successful-flush `finish` event.
 class ControlledChild extends EventEmitter {
-  constructor() {
+  constructor({ emitClose = true } = {}) {
     super();
     this.stdout = new PassThrough();
     this.stderr = new PassThrough();
     this.inputEnding = new Promise((resolve) => {
       this.stdin = new Writable({
+        emitClose,
         write(_bytes, _encoding, done) {
           done();
         },
@@ -34,6 +35,7 @@ class ControlledChild extends EventEmitter {
   }
 }
 
+/** Records settlement without awaiting a promise that may be defective. */
 function observe(promise) {
   const outcome = { status: 'pending' };
   promise.then(
@@ -43,6 +45,7 @@ function observe(promise) {
   return outcome;
 }
 
+/** Opens the production adapter at the controlled host process boundary. */
 async function openSession(child) {
   const runner = new NodeShellRunner({ spawnProcess: () => child });
   return await runner.open({ command: 'git', args: [], maxStderrBytes: 1024 });
@@ -82,8 +85,28 @@ describe('Node command session input lifecycle', () => {
     assert.deepEqual(outcome, { status: 'fulfilled' });
     assert.equal(child.stdin.writableFinished, true);
     assert.equal(child.stdin.listenerCount('close'), 0, 'closure listeners must be released');
+    assert.equal(child.listenerCount('close'), 1, 'only process completion retains a listener');
     child.exit();
     await session.finished;
+  });
+
+  it('settles input closure when process completion precedes the stdin close event', async () => {
+    const child = new ControlledChild({ emitClose: false });
+    const session = await openSession(child);
+    const outcome = observe(session.closeInput());
+    await child.inputEnding;
+
+    child.exit();
+    await session.finished;
+    await nextTurn();
+
+    assert.equal(child.stdin.closed, true);
+    assert.equal(child.stdin.writableFinished, false);
+    assert.deepEqual(
+      outcome,
+      { status: 'fulfilled' },
+      'closeInput must settle when the process completes before stdin dispatches close'
+    );
   });
 
   it('preserves an input error when the stream closes during shutdown', async () => {
@@ -99,6 +122,7 @@ describe('Node command session input lifecycle', () => {
     assert.deepEqual(outcome, { status: 'rejected', error: failure });
     assert.equal(child.stdin.listenerCount('finish'), 0, 'closure listeners must be released');
     assert.equal(child.stdin.listenerCount('close'), 0, 'closure listeners must be released');
+    assert.equal(child.listenerCount('close'), 1, 'only process completion retains a listener');
     await assert.rejects(session.closeInput(), (error) => error === failure);
     child.exit(1);
     await session.finished;
