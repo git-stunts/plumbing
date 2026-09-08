@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-09-07
+
 ### Fixed
 
 - **Node Session Shutdown**: Input closure now settles when a child closes stdin
