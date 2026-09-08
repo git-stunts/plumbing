@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Node Session Shutdown**: Input closure now settles when a child closes stdin
+  without a `finish` event, preventing persistent Git protocol shutdown and
+  downstream session retirement from hanging. Reported input errors and process
+  exit failures remain visible.
+
 ## [3.3.0] - 2026-08-23
 
 ### Added

@@ -107,17 +107,33 @@ export default class NodeShellRunner {
           return;
         }
         await new Promise((resolve, reject) => {
+          const cleanup = () => {
+            child.stdin.off('error', onError);
+            child.stdin.off('finish', onClosed);
+            child.stdin.off('close', onClosed);
+          };
           const onError = (error) => {
-            child.stdin.off('finish', onFinish);
+            cleanup();
             reject(error);
           };
-          const onFinish = () => {
-            child.stdin.off('error', onError);
-            resolve();
+          const onClosed = () => {
+            cleanup();
+            if (inputError !== null) {
+              reject(inputError);
+            } else {
+              resolve();
+            }
           };
           child.stdin.once('error', onError);
-          child.stdin.once('finish', onFinish);
-          child.stdin.end();
+          child.stdin.once('finish', onClosed);
+          // A child can close its pipe without flushing Writable's final hook.
+          // Process success remains the responsibility of session.finished.
+          child.stdin.once('close', onClosed);
+          try {
+            child.stdin.end();
+          } catch (error) {
+            onError(error);
+          }
         });
       },
       terminate: () => {
