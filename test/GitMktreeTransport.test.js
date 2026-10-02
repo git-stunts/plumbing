@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { Readable } from 'node:stream';
 import {
   CommandSession,
@@ -30,16 +29,20 @@ function brokenPipe() {
   return Object.assign(new Error('broken pipe'), { code: 'EPIPE' });
 }
 
+// Medium: real Node streams, controlled transport failures, no subprocess or clock.
+// Oracle: only closed transport writes become protocol errors; other errors retain identity.
 describe('mktree closed transport classification', () => {
-  it.each(['single', 'batch'])('classifies a broken pipe in %s writes and releases the process', async (mode) => {
-    const cause = brokenPipe();
-    const fixture = command(cause);
-    const writer = new GitMktreeSession(fixture.session);
-    const request = mode === 'single' ? writer.write([ENTRY]) : writer.writeMany([[ENTRY]]);
-    await expect(request).rejects.toBeInstanceOf(GitProtocolError);
-    await expect(request).rejects.toMatchObject({ details: { cause } });
-    expect(fixture.terminations()).toBe(1);
-  });
+  for (const mode of ['single', 'batch']) {
+    it(`classifies a broken pipe in ${mode} writes and releases the process`, async () => {
+      const cause = brokenPipe();
+      const fixture = command(cause);
+      const writer = new GitMktreeSession(fixture.session);
+      const request = mode === 'single' ? writer.write([ENTRY]) : writer.writeMany([[ENTRY]]);
+      await expect(request).rejects.toBeInstanceOf(GitProtocolError);
+      await expect(request).rejects.toMatchObject({ details: { cause } });
+      expect(fixture.terminations()).toBe(1);
+    });
+  }
 
   it('classifies already-closed input regardless of notification ordering', async () => {
     const cause = new GitPlumbingError('input closed', 'write', { code: 'SESSION_INPUT_CLOSED' });
@@ -67,13 +70,15 @@ describe('mktree closed transport classification', () => {
     expect(fixture.terminations()).toBe(1);
   });
 
-  it.each(['single', 'batch'])('preserves a producer failure with an identical system error code in %s writes', async (mode) => {
-    const cause = brokenPipe();
-    const fixture = command(null);
-    const writer = new GitMktreeSession(fixture.session);
-    async function* entries() { yield ENTRY; throw cause; }
-    const request = mode === 'single' ? writer.write(entries()) : writer.writeMany([entries()]);
-    await expect(request).rejects.toBe(cause);
-    expect(fixture.terminations()).toBe(mode === 'single' ? 1 : 0);
-  });
+  for (const mode of ['single', 'batch']) {
+    it(`preserves a producer failure with an identical system error code in ${mode} writes`, async () => {
+      const cause = brokenPipe();
+      const fixture = command(null);
+      const writer = new GitMktreeSession(fixture.session);
+      async function* entries() { yield ENTRY; throw cause; }
+      const request = mode === 'single' ? writer.write(entries()) : writer.writeMany([entries()]);
+      await expect(request).rejects.toBe(cause);
+      expect(fixture.terminations()).toBe(mode === 'single' ? 1 : 0);
+    });
+  }
 });
