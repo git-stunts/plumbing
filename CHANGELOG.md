@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Classify broken-pipe and already-closed mktree input as protocol failures so
+  callers can invalidate stale sessions after external Git repacking. Preserve
+  the original cause; unrelated transport and producer errors remain unchanged.
+
+
 ## [3.3.1] - 2026-09-07
 
 ### Fixed
