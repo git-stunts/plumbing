@@ -6,6 +6,7 @@ import './GitBlob.test.js';
 import './Changelog.test.js';
 import './EnvironmentOverrideSecurity.test.js';
 import './GitProtocolSessions.test.js';
+import './GitMktreeTransport.test.js';
 import './GitCommitFlow.test.js';
 import './GitRef.test.js';
 import './GitSha.test.js';
