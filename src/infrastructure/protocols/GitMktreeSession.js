@@ -286,7 +286,7 @@ function validateBatchTotals(entries, bytes) {
 
 function isClosedMktreeInput(error) {
   if (error instanceof GitPlumbingError) {
-    return error.details.code === 'SESSION_INPUT_CLOSED';
+    return error.details?.code === 'SESSION_INPUT_CLOSED';
   }
   return error instanceof Error && error.code === 'EPIPE';
 }

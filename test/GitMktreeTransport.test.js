@@ -59,12 +59,21 @@ describe('mktree closed transport classification', () => {
     expect(fixture.terminations()).toBe(1);
   });
 
-  it('preserves a producer failure with an identical system error code', async () => {
+  it('preserves a plumbing failure with explicitly absent details', async () => {
+    const cause = new GitPlumbingError('original failure', 'write', null);
+    const fixture = command(cause);
+    const writer = new GitMktreeSession(fixture.session);
+    await expect(writer.write([ENTRY])).rejects.toBe(cause);
+    expect(fixture.terminations()).toBe(1);
+  });
+
+  it.each(['single', 'batch'])('preserves a producer failure with an identical system error code in %s writes', async (mode) => {
     const cause = brokenPipe();
     const fixture = command(null);
     const writer = new GitMktreeSession(fixture.session);
     async function* entries() { yield ENTRY; throw cause; }
-    await expect(writer.write(entries())).rejects.toBe(cause);
-    expect(fixture.terminations()).toBe(1);
+    const request = mode === 'single' ? writer.write(entries()) : writer.writeMany([entries()]);
+    await expect(request).rejects.toBe(cause);
+    expect(fixture.terminations()).toBe(mode === 'single' ? 1 : 0);
   });
 });
