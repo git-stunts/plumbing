@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Upgrade `zod` from 3 to 4 (`^4.6.7`) to clear GHSA-mrhx-c7xc-m3w5. Validation
+  error contexts keep their `errors` key, now filled from zod 4 `issues`. Where
+  a schema sets no custom message, messages use zod 4 wording. Session results
+  keep zod 3's promise semantics: a non-promise `finished` is rejected at once,
+  and a malformed completion rejects when it settles.
+
 ## [3.3.2] - 2026-10-02
 
 ### Fixed

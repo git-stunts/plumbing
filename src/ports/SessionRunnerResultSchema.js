@@ -24,16 +24,34 @@ const SESSION_COMPLETION = z
   })
   .passthrough();
 
+const THENABLE = z.custom(
+  (value) =>
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof value.then === 'function' &&
+    typeof value.catch === 'function',
+  { message: 'Expected a promise' }
+);
+
 /**
  * Zod schema for the raw result returned by a CommandSessionRunner.
  */
 export const SessionRunnerResultSchema = z.object({
   stdoutStream: READABLE_STREAM,
-  finished: z.promise(SESSION_COMPLETION),
+  finished: THENABLE,
   write: FUNCTION,
   closeInput: FUNCTION,
   terminate: FUNCTION,
-});
+})
+  // zod 4 cannot hold a promise-valued check inside a synchronous object parse.
+  // Keep zod 3's z.promise() semantics: reject non-thenables now and validate
+  // the completion when it settles.
+  .transform((result) => ({
+    ...result,
+    finished: Promise.resolve(result.finished).then((completion) =>
+      SESSION_COMPLETION.parse(completion)
+    ),
+  }));
 
 /**
  * @typedef {z.infer<typeof SessionRunnerResultSchema>} SessionRunnerResult
