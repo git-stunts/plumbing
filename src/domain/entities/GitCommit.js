@@ -57,9 +57,9 @@ export default class GitCommit {
     const result = GitCommitSchema.safeParse(data);
     if (!result.success) {
       throw new ValidationError(
-        `Invalid commit data: ${result.error.errors[0].message}`,
+        `Invalid commit data: ${result.error.issues[0].message}`,
         'GitCommit.fromData',
-        { data, errors: result.error.errors }
+        { data, errors: result.error.issues }
       );
     }
 

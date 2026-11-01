@@ -11,7 +11,7 @@ export const SessionRunnerOptionsSchema = z.object({
   command: z.string(),
   args: z.array(z.string()),
   cwd: z.string().optional(),
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   maxStderrBytes: z.number().int().positive().default(DEFAULT_MAX_STDERR_SIZE),
   timeout: z.number().int().positive().max(2_147_483_647).optional(),
 });

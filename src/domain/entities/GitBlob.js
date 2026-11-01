@@ -25,9 +25,9 @@ export default class GitBlob {
     const result = GitBlobSchema.safeParse(data);
     if (!result.success) {
       throw new ValidationError(
-        `Invalid blob: ${result.error.errors[0].message}`,
+        `Invalid blob: ${result.error.issues[0].message}`,
         'GitBlob.constructor',
-        { data, errors: result.error.errors }
+        { data, errors: result.error.issues }
       );
     }
 

@@ -29,9 +29,9 @@ export default class GitTree {
     const result = GitTreeSchema.safeParse(data);
     if (!result.success) {
       throw new ValidationError(
-        `Invalid tree data: ${result.error.errors[0].message}`,
+        `Invalid tree data: ${result.error.issues[0].message}`,
         'GitTree.constructor',
-        { data, errors: result.error.errors }
+        { data, errors: result.error.issues }
       );
     }
 
@@ -48,9 +48,9 @@ export default class GitTree {
     const result = GitTreeSchema.safeParse(data);
     if (!result.success) {
       throw new ValidationError(
-        `Invalid tree data: ${result.error.errors[0].message}`,
+        `Invalid tree data: ${result.error.issues[0].message}`,
         'GitTree.fromData',
-        { data, errors: result.error.errors }
+        { data, errors: result.error.issues }
       );
     }
 

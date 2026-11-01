@@ -21,9 +21,9 @@ export default class GitRef {
     const result = GitRefSchema.safeParse(ref);
     if (!result.success) {
       throw new ValidationError(
-        `Invalid Git reference: ${ref}. Reason: ${result.error.errors[0].message}`,
+        `Invalid Git reference: ${ref}. Reason: ${result.error.issues[0].message}`,
         'GitRef.constructor',
-        { ref, errors: result.error.errors }
+        { ref, errors: result.error.issues }
       );
     }
     this._value = result.data;

@@ -19,9 +19,9 @@ export default class GitSignature {
     const result = GitSignatureSchema.safeParse(data);
     if (!result.success) {
       throw new ValidationError(
-        `Invalid signature: ${result.error.errors[0].message}`,
+        `Invalid signature: ${result.error.issues[0].message}`,
         'GitSignature.constructor',
-        { data, errors: result.error.errors }
+        { data, errors: result.error.issues }
       );
     }
     

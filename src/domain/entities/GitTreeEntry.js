@@ -31,9 +31,9 @@ export default class GitTreeEntry {
     const result = GitTreeEntrySchema.safeParse(data);
     if (!result.success) {
       throw new ValidationError(
-        `Invalid tree entry: ${result.error.errors[0].message}`,
+        `Invalid tree entry: ${result.error.issues[0].message}`,
         'GitTreeEntry.constructor',
-        { data, errors: result.error.errors }
+        { data, errors: result.error.issues }
       );
     }
 
