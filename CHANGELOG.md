@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.3] - 2026-11-01
+
 ### Changed
 
 - Upgrade `zod` from 3 to 4 (`^4.6.7`) to clear GHSA-mrhx-c7xc-m3w5. Validation
