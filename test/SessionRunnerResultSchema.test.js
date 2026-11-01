@@ -29,6 +29,13 @@ describe('SessionRunnerResultSchema', () => {
     expect(() => SessionRunnerResultSchema.parse(sessionResult(42))).toThrow('Expected a promise');
   });
 
+  it('preserves a rejected completion through a re-parse', async () => {
+    const failure = new Error('completion failed');
+    const once = SessionRunnerResultSchema.parse(sessionResult(Promise.reject(failure)));
+
+    await expect(SessionRunnerResultSchema.parse(once).finished).rejects.toBe(failure);
+  });
+
   it('can re-parse an already parsed result', async () => {
     const once = SessionRunnerResultSchema.parse(
       sessionResult(Promise.resolve({ code: 1, stderr: 'boom', timedOut: false }))
