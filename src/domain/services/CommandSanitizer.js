@@ -46,8 +46,17 @@ export default class CommandSanitizer {
     'fast-import',
     'log',
     'show',
-    'prune'
+    'prune',
+    'repack'
   ]);
+
+  /**
+   * The only arguments `repack` accepts: a geometric roll-up that deletes the
+   * packs it makes redundant. Each appears exactly once, in either order, and
+   * nothing else may appear before or after the command.
+   * @private
+   */
+  static _REPACK_ARGS = Object.freeze(['--geometric=2', '-d']);
 
   /**
    * Global git flags that are strictly prohibited.
@@ -116,9 +125,14 @@ export default class CommandSanitizer {
    * @param {string[]} args
    * @param {number} commandIndex
    * @throws {ProhibitedFlagError} If a command omits a required safety flag
+   *   or differs from its only allowed form
    * @private
    */
   static _validateCommandSafety(command, args, commandIndex) {
+    if (command === 'repack') {
+      CommandSanitizer._validateRepackShape(args, commandIndex);
+      return;
+    }
     if (command !== 'prune') {
       return;
     }
@@ -128,6 +142,31 @@ export default class CommandSanitizer {
     if (!flags.includes('--dry-run') && !flags.includes('-n')) {
       throw new ProhibitedFlagError('prune', 'CommandSanitizer.sanitize', {
         message: "The 'prune' command is allowed only with --dry-run or -n"
+      });
+    }
+  }
+
+  /**
+   * Accepts `repack` only as `repack --geometric=2 -d`, with the two flags in
+   * either order. Positional arguments, `--`, global options before the
+   * command, other flags, other geometric factors, and repeated flags are
+   * all refused.
+   * @param {string[]} args
+   * @param {number} commandIndex
+   * @throws {ProhibitedFlagError} If the arguments differ from the accepted form
+   * @private
+   */
+  static _validateRepackShape(args, commandIndex) {
+    const allowedArgs = CommandSanitizer._REPACK_ARGS;
+    const commandArgs = args.slice(commandIndex + 1);
+    // The allowed arguments are distinct, so equal counts plus the presence of
+    // each one mean each appears exactly once and nothing else appears.
+    const isAllowedShape = commandIndex === 0
+      && commandArgs.length === allowedArgs.length
+      && allowedArgs.every((arg) => commandArgs.includes(arg));
+    if (!isAllowedShape) {
+      throw new ProhibitedFlagError('repack', 'CommandSanitizer.sanitize', {
+        message: `The 'repack' command is allowed only as 'repack ${allowedArgs.join(' ')}'`
       });
     }
   }
