@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Geometric Repack**: The command sanitizer now accepts exactly one `repack`
+  form, `repack --geometric=2 -d`, with the two flags in either order. It
+  refuses every other form: positional arguments, `--`, global options before
+  the command, other flags such as `-a`, `-A`, `--cruft`, or
+  `--unpack-unreachable`, other geometric factors, and repeated flags.
+  `repack` is in the static allowlist, so callers do not need
+  `CommandSanitizer.allow()`.
+
 ## [3.3.3] - 2026-11-01
 
 ### Changed

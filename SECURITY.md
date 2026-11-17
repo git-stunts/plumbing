@@ -19,6 +19,16 @@ We explicitly block global flags that can be used to bypass security controls or
 
 The library only permits execution of a strictly defined set of "plumbing" commands. Porcelain commands (like `push`, `pull`, or `clone`) are currently omitted to focus on local object database manipulation and to reduce the attack surface.
 
+Two maintenance commands are allowed only in a fixed shape that never discards
+objects:
+
+- `prune`: only with `--dry-run` or `-n`, so it reports objects and deletes none.
+- `repack`: only as `repack --geometric=2 -d` (the two flags in either order).
+  It rolls small packs and loose objects into larger packs and deletes only the
+  copies made redundant. Every other form is refused, including `-a`, `-A`, `--cruft`,
+  `--unpack-unreachable`, other geometric factors, positional arguments, and
+  global options before the command.
+
 ## 🧼 Environment Policy
 
 By default, Git processes run in a "Clean Environment." We only whitelist variables essential for identity and localization:

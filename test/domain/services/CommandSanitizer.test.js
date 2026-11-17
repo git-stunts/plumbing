@@ -2,6 +2,50 @@ import CommandSanitizer from '../../../src/domain/services/CommandSanitizer.js';
 import ValidationError from '../../../src/domain/errors/ValidationError.js';
 import ProhibitedFlagError from '../../../src/domain/errors/ProhibitedFlagError.js';
 
+// Oracle: the static command allowlist released in v3.3.3, plus 'repack',
+// the only command added for geometric pack maintenance.
+const EXPECTED_ALLOWED_COMMANDS = [
+  'cat-file', 'check-attr', 'check-ignore', 'commit-tree', 'config',
+  'diff-files', 'diff-index', 'diff-tree', 'fast-import', 'for-each-ref',
+  'hash-object', 'init', 'log', 'ls-files', 'ls-tree', 'merge-base', 'mktree',
+  'prune', 'read-tree', 'repack', 'rev-list', 'rev-parse', 'show', 'show-ref',
+  'symbolic-ref', 'unpack-objects', 'update-ref', 'write-tree'
+];
+
+// Captured at module load, before any test calls CommandSanitizer.allow().
+const ALLOWED_COMMANDS_AT_LOAD = [...CommandSanitizer._ALLOWED_COMMANDS].sort();
+
+// Every repack form except `repack --geometric=2 -d` (in either flag order).
+const REFUSED_REPACK_FORMS = [
+  ['without -d', ['repack', '--geometric=2']],
+  ['without --geometric=2', ['repack', '-d']],
+  ['without arguments', ['repack']],
+  ['with an extra flag', ['repack', '--geometric=2', '-d', '--write-bitmap-index']],
+  ['with a positional argument', ['repack', '--geometric=2', '-d', 'HEAD']],
+  ['with a trailing end-of-options marker', ['repack', '--geometric=2', '-d', '--']],
+  ['with a leading end-of-options marker', ['repack', '--', '--geometric=2', '-d']],
+  ['with a non-numeric geometric factor', ['repack', '--geometric=abc', '-d']],
+  ['with geometric factor 3', ['repack', '--geometric=3', '-d']],
+  ['with geometric factor 02', ['repack', '--geometric=02', '-d']],
+  ['with a bare --geometric', ['repack', '--geometric', '-d']],
+  ['with the geometric factor as a separate argument', ['repack', '--geometric', '2', '-d']],
+  ['with the short geometric form', ['repack', '-g2', '-d']],
+  ['with a duplicate -d', ['repack', '--geometric=2', '-d', '-d']],
+  ['with a duplicate --geometric=2 and no -d', ['repack', '--geometric=2', '--geometric=2']],
+  ['with -a -d', ['repack', '-a', '-d']],
+  ['with -a added to the allowed form', ['repack', '-a', '--geometric=2', '-d']],
+  ['with -A', ['repack', '--geometric=2', '-d', '-A']],
+  ['with combined short flags', ['repack', '--geometric=2', '-ad']],
+  ['with --cruft', ['repack', '--geometric=2', '-d', '--cruft']],
+  ['with --unpack-unreachable', ['repack', '--geometric=2', '-d', '--unpack-unreachable=now']],
+  ['with -f', ['repack', '--geometric=2', '-d', '-f']],
+  ['with --window', ['repack', '--geometric=2', '-d', '--window=250']],
+  ['with --max-pack-size', ['repack', '--geometric=2', '-d', '--max-pack-size=1m']],
+  ['with an uppercase -D', ['repack', '--geometric=2', '-D']],
+  ['with a global option before the command', ['--bare', 'repack', '--geometric=2', '-d']],
+  ['with -d before the command', ['-d', 'repack', '--geometric=2']]
+];
+
 describe('CommandSanitizer', () => {
   let sanitizer;
 
@@ -38,6 +82,26 @@ describe('CommandSanitizer', () => {
       .toThrow(ProhibitedFlagError);
     expect(() => sanitizer.sanitize(['prune', '--', '--dry-run']))
       .toThrow(ProhibitedFlagError);
+  });
+
+  it('allows repack as the geometric roll-up form', () => {
+    const args = ['repack', '--geometric=2', '-d'];
+    expect(sanitizer.sanitize(args)).toBe(args);
+  });
+
+  it('allows repack as the geometric roll-up form with the flags reversed', () => {
+    const args = ['repack', '-d', '--geometric=2'];
+    expect(sanitizer.sanitize(args)).toBe(args);
+  });
+
+  for (const [form, args] of REFUSED_REPACK_FORMS) {
+    it(`refuses repack ${form}`, () => {
+      expect(() => sanitizer.sanitize(args)).toThrow(ProhibitedFlagError);
+    });
+  }
+
+  it('adds only repack to the static command allowlist', () => {
+    expect(ALLOWED_COMMANDS_AT_LOAD).toEqual(EXPECTED_ALLOWED_COMMANDS);
   });
 
   it('does not confuse safe and destructive commands in the memoization cache', () => {
